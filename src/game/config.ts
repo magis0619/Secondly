@@ -1,112 +1,166 @@
 /**
  * ★全チューニング定数の一元管理。バランス調整はこのファイルだけを触る。
- * 距離は「文字盤半径R = 1.0」の相対値、速度は R/秒、角度は度(deg)で記す。
+ * 座標はタイル単位(col=横列0..6中心値, depth=行の連続値)。速度は 行/秒・列/秒。
+ *
+ * 【公平性の不変条件】DASHの最大距離(TIERS[2].rows=11) < 画面の先読み行数(約12行)。
+ * これを破ると「見えない場所へ突っ込む理不尽」が生まれるので、rows か
+ * カメラアンカー(CAMERA.ANCHOR_RATIO)を変えるときは必ず両方を確認すること。
  */
 
 export const COLORS = {
   bg: "#0a0e1a",
   bgGlow: "#141d33",
-  dial: "#25314f",
-  dialBright: "#3a4a75",
-  tickLit: "#3ec6ff",
-  hand: "#eaf6ff",
-  core: "#ffd166",
-  danger: "#ff3b5c",
-  enemy: {
-    tick: "#38e1ff",
-    rush: "#ff4fa3",
-    chime: "#ffb84d",
-  } as Record<string, string>,
-  bullet: "#ffde7a",
-  tier: ["#eaf6ff", "#38e1ff", "#ff4fa3"],
+  sky: "#16213f",
   text: "#eaf6ff",
   textDim: "#7f8db4",
-};
-
-export const HAND = {
-  ROT_PERIOD: 3.0, // 1周にかかる秒数
-  ROT_PERIOD_FAST: 2.5,
-  ROT_FAST_AT: 45, // この経過秒から回転が速くなる
-  IDLE_LEN: 0.88,
-  SHRINK_LEN: 0.3,
-  SHRINK_RATE: 20, // 縮み追従の速さ(damp係数)
-  GROW_RATE: 12,
-  CHARGE_T2: 0.45, // このホールド秒数でLv2
-  CHARGE_T3: 0.95, // このホールド秒数でLv3(MAX)
-  TIERS: [
-    { len: 1.0, arcDeg: 22, power: 1, mult: 1 },
-    { len: 1.06, arcDeg: 32, power: 2, mult: 1.5 },
-    { len: 1.18, arcDeg: 45, power: 3, mult: 2 },
-  ],
-  HIT_TIME: 0.1, // 解放後、攻撃判定が生きている時間
-  ANIM_TIME: 0.18, // 伸び→戻りのアニメ時間
-  RECOVERY: 0.15, // 再チャージ不可時間
-  AIM_OFFSET_DEG: 10, // 進行方向への判定オフセット(先読み補正)
-  CRIT_BAND: 0.22, // 針の先端この割合の帯に当たるとクリティカル
-  THICK: 0.022, // 弾との当たり判定に使う針の太さ(R比)
+  danger: "#ff3b5c",
+  coin: "#ffd166",
+  machine: "#eaf6ff",
+  drill: "#3ec6ff",
+  tier: ["#eaf6ff", "#38e1ff", "#ff4fa3"],
+  wall: "#111a30",
+  tile: {
+    rock: "#6b7694",
+    rockDark: "#4a5470",
+    steel: "#aebcd8",
+    steelDark: "#7d8cb0",
+    ore: "#ffd166",
+    gem: "#b48cff",
+    lava: "#ff5a3c",
+    lavaGlow: "#ffb03c",
+    gas: "#7dff8a",
+    core: "#ffd166",
+  },
 } as const;
 
-export const CORE = {
+export const GRID = {
+  COLS: 7,
+  /** タイル1辺 = TILE_UNITS * vp.unit (unit=短辺/400 → 7列で350unit+左右の岩壁帯) */
+  TILE_UNITS: 46,
+} as const;
+
+export const CAMERA = {
+  /** 機体を画面上からこの割合の位置に置く(下に約12行の先読みを確保) */
+  ANCHOR_RATIO: 0.3,
+  FOLLOW: 8, // damp係数
+  FOLLOW_DASH: 16,
+} as const;
+
+export const MACHINE = {
   HP: 3,
-  RADIUS: 0.09,
-  INVULN: 1.0, // 被弾後の無敵秒数
+  INVULN: 1.0,
+  /** 自動掘削の降下速度(行/s)。土・鉱石などのソフト地形のみ */
+  DRILL_SPEED: 1.6,
+  /** 空洞での落下速度(行/s) */
+  FALL_SPEED: 7,
+  /** 横移動: 空洞・掘削済み空間での追従damp係数 */
+  SIDE_FOLLOW: 14,
+  /** 横移動: 土を削りながら進む速度(列/s) */
+  SIDE_DIG_SPEED: 1.7,
+  /** ドラッグ感度(画面上でタイル1枚ぶん動かすと機体が何列動くか) */
+  DRAG_SENS: 1.35,
+  /** キーボード←→の移動速度(列/s) */
+  KEY_SPEED: 5,
+  /** 機体の当たり半径(タイル比) */
+  HITBOX: 0.34,
+  /** 被弾時に押し戻される行数 */
+  KNOCKBACK_ROWS: 0.7,
+  /** これ未満のチャージで離してもダッシュしない(操縦ドラッグの誤爆防止) */
+  CHARGE_T1: 0.22,
+  CHARGE_T2: 0.45,
+  CHARGE_T3: 0.95,
+  /** このフレーム移動量(列)を超えるドラッグを「操縦中」とみなす */
+  CHARGE_MOVE_EPS: 0.015,
+  /** 最後のドラッグからこの秒数はチャージが増えない(タッチイベントの粒度対策) */
+  CHARGE_MOVE_LOCK: 0.18,
+  /** ダッシュ3ティア: 最大行数 / 速度(行/s) / 破壊可能硬度(1=岩, 2=鉄骨) */
+  TIERS: [
+    { rows: 4, speed: 14, power: 1, label: "Lv1" },
+    { rows: 7, speed: 16, power: 2, label: "Lv2" },
+    { rows: 11, speed: 18, power: 2, label: "MAX" },
+  ],
+  HURT_TIME: 0.35,
 } as const;
 
-export const STAGE = {
-  TIME: 60,
-} as const;
+export type TileKind =
+  | "empty"
+  | "dirt"
+  | "rock"
+  | "steel"
+  | "ore"
+  | "gem"
+  | "lava"
+  | "gas"
+  | "core";
 
-export type EnemyKind = "tick" | "rush" | "chime";
-
-export interface EnemyDef {
-  hp: number;
-  speed: number; // R/s(中心へ向かう速度)
-  score: number;
-  size: number; // 当たり半径(R比)
-  telegraph: number; // スポーン予告の秒数
-}
-
-export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
-  tick: { hp: 1, speed: 0.11, score: 100, size: 0.05, telegraph: 0.9 },
-  rush: { hp: 1, speed: 0.242, score: 150, size: 0.045, telegraph: 1.2 },
-  chime: { hp: 2, speed: 0.11, score: 300, size: 0.06, telegraph: 0.9 },
+/** タイル特性。hardness: 0=ソフト(自動掘削可) 1=岩 2=鉄骨 99=破壊不可 */
+export const TILE_DEFS: Record<TileKind, { hardness: number; hazard: boolean }> = {
+  empty: { hardness: 0, hazard: false },
+  dirt: { hardness: 0, hazard: false },
+  ore: { hardness: 0, hazard: false },
+  gem: { hardness: 0, hazard: false },
+  gas: { hardness: 0, hazard: true }, // 触れるとダメージ、ダッシュ中は無害に破壊
+  rock: { hardness: 1, hazard: false },
+  steel: { hardness: 2, hazard: false },
+  lava: { hardness: 99, hazard: true }, // 破壊不可。重なるとダメージ
+  core: { hardness: 0, hazard: false }, // 接触=ステージクリア
 };
-
-export const CHIME = {
-  STOP_DIST: 0.95, // ここまで侵入して停止
-  FIRE_INTERVAL: 2.2,
-} as const;
-
-export const BULLET = {
-  SPEED: 0.28,
-  SIZE: 0.02,
-} as const;
-
-export const SPAWN_DIST = 1.15;
-export const CHIME_RESPAWN = 6; // Chime撃破後の再配置クールダウン
-export const SPAWN_MIN_SEP_DEG = 90; // 直前スポーンとの最低角度差
-
-export interface Phase {
-  until: number; // この経過秒まで有効
-  interval: number; // 通常スポーン間隔(Infinity=停止)
-  weights: [EnemyKind, number][];
-  chime: number; // 常時維持するChime数
-  dual: boolean; // 対角同時スポーンを混ぜる
-}
-
-export const PHASES: Phase[] = [
-  { until: 12, interval: 2.0, weights: [["tick", 1]], chime: 0, dual: false },
-  { until: 24, interval: 1.4, weights: [["tick", 4], ["rush", 1]], chime: 0, dual: false },
-  { until: 36, interval: 1.1, weights: [["tick", 3], ["rush", 2]], chime: 1, dual: false },
-  { until: 48, interval: 0.85, weights: [["tick", 3], ["rush", 2]], chime: 2, dual: false },
-  { until: 57, interval: 0.65, weights: [["tick", 1], ["rush", 1]], chime: 2, dual: true },
-  { until: 999, interval: Infinity, weights: [["tick", 1]], chime: 0, dual: false },
-];
 
 export const SCORE = {
-  CHAIN_WINDOW: 2.5, // この秒数以内の連続撃破でチェーン継続
-  CHAIN_STEP: 0.1, // コンボ1につき+0.1倍
-  CHAIN_MAX: 3.0,
-  CRIT_MULT: 2,
-  CLEAR_BONUS_PER_HP: 1000,
+  /** 貫通コンボ: 1ダッシュで壊したタイル数nに対し SMASH_BASE * n * n */
+  SMASH_BASE: 30,
+  ORE: 50,
+  GEM: 250,
+  ORE_COINS: 1,
+  GEM_COINS: 5,
+  /** ダッシュ中の鉱石取得は倍 */
+  DASH_PICKUP_MULT: 2,
+  TIME_BONUS_PER_SEC: 100,
+  HP_BONUS: 500,
+  /** 失敗時のコイン持ち帰り率 */
+  FAIL_COIN_RATE: 0.5,
 } as const;
+
+export interface UpgradeDef {
+  key: "chargeSpeed" | "armor";
+  name: string;
+  desc: string;
+  max: number;
+  costs: number[]; // レベルごとの価格
+}
+
+export const UPGRADE_DEFS: UpgradeDef[] = [
+  {
+    key: "chargeSpeed",
+    name: "ハイスピードバネ",
+    desc: "チャージ時間 -12% / Lv",
+    max: 2,
+    costs: [30, 90],
+  },
+  {
+    key: "armor",
+    name: "アーマープレート",
+    desc: "HP +1 / Lv",
+    max: 2,
+    costs: [50, 140],
+  },
+];
+
+/** chargeSpeed Lv1つきのチャージ閾値短縮率 */
+export const CHARGE_SPEED_PER_LV = 0.12;
+
+/** セーブから導出してWorldへ渡す実効値(Worldはストレージを直接読まない) */
+export interface RunMods {
+  chargeT2: number;
+  chargeT3: number;
+  maxHp: number;
+}
+
+export function modsFromUpgrades(up: { chargeSpeed: number; armor: number }): RunMods {
+  const k = 1 - CHARGE_SPEED_PER_LV * up.chargeSpeed;
+  return {
+    chargeT2: MACHINE.CHARGE_T2 * k,
+    chargeT3: MACHINE.CHARGE_T3 * k,
+    maxHp: MACHINE.HP + up.armor,
+  };
+}

@@ -9,7 +9,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   // App Store の Bundle ID。公開前に本人のものへ確定すること（例: com.yourname.secondly）。
   appId: "com.example.secondly",
-  appName: "Secondly",
+  appName: "SPRING DRILL",
   webDir: "dist",
   ios: {
     // WKWebView の背景色（セーフエリア外/スクロールバウンス時に見える色）。テーマに合わせる。

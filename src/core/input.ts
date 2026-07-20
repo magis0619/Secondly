@@ -1,17 +1,22 @@
 /**
  * 入力はPointer Eventsに統一(タッチ/マウス両対応)。
- * ゲームの操作は「押す」「離す」の2つだけ。プライマリポインタのみ追跡し、
- * pointercancel(通知センター引き出し等)は「離す」と同じ扱いにする。
- * 開発用にスペースキーでも同じ操作ができる。
+ * 「押す/離す」に加え、押下中の横ドラッグ量(dragDX)を追跡する。
+ * プライマリポインタのみ追跡し、pointercancel(通知センター等)は「離す」と同じ扱い。
+ * 開発用: スペース=押す/離す、←→=横移動(keyDir)。
  */
 export interface InputHandler {
   onDown?(x: number, y: number): void;
   onUp?(x: number, y: number): void;
+  onMove?(x: number, y: number): void;
 }
 
 export interface Input {
   /** 現在押下中か(イベント取りこぼし対策に毎フレーム参照できる) */
   readonly pressed: boolean;
+  /** キーボード←→の方向(-1/0/+1)。タッチと併用可(開発用) */
+  readonly keyDir: number;
+  /** 前回消費から累積した横ドラッグ量(px)を取り出してリセットする */
+  consumeDragDX(): number;
   setHandler(h: InputHandler): void;
 }
 
@@ -19,13 +24,25 @@ export function createInput(canvas: HTMLCanvasElement): Input {
   let handler: InputHandler = {};
   let pressed = false;
   let activeId: number | null = null;
+  let lastX = 0;
+  let dragDX = 0;
+  let left = false;
+  let right = false;
 
   const down = (e: PointerEvent) => {
     e.preventDefault();
     if (activeId !== null) return; // マルチタッチの2本目以降は無視
     activeId = e.pointerId;
     pressed = true;
+    lastX = e.clientX;
     handler.onDown?.(e.clientX, e.clientY);
+  };
+  const move = (e: PointerEvent) => {
+    if (e.pointerId !== activeId) return;
+    e.preventDefault();
+    dragDX += e.clientX - lastX;
+    lastX = e.clientX;
+    handler.onMove?.(e.clientX, e.clientY);
   };
   const up = (e: PointerEvent) => {
     e.preventDefault();
@@ -36,6 +53,7 @@ export function createInput(canvas: HTMLCanvasElement): Input {
   };
 
   canvas.addEventListener("pointerdown", down);
+  canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", up);
   canvas.addEventListener("pointercancel", up);
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -45,17 +63,29 @@ export function createInput(canvas: HTMLCanvasElement): Input {
       pressed = true;
       handler.onDown?.(innerWidth / 2, innerHeight / 2);
     }
+    if (e.code === "ArrowLeft") left = true;
+    if (e.code === "ArrowRight") right = true;
   });
   window.addEventListener("keyup", (e) => {
     if (e.code === "Space" && pressed) {
       pressed = false;
       handler.onUp?.(innerWidth / 2, innerHeight / 2);
     }
+    if (e.code === "ArrowLeft") left = false;
+    if (e.code === "ArrowRight") right = false;
   });
 
   return {
     get pressed() {
       return pressed;
+    },
+    get keyDir() {
+      return (right ? 1 : 0) - (left ? 1 : 0);
+    },
+    consumeDragDX() {
+      const dx = dragDX;
+      dragDX = 0;
+      return dx;
     },
     setHandler(h: InputHandler) {
       handler = h;
