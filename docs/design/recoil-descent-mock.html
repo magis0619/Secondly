@@ -1,0 +1,99 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>body{margin:0;background:#0a0e1a}canvas{display:block}</style>
+<canvas id="c" width="780" height="1688" style="width:390px;height:844px"></canvas>
+<script>
+const ctx = document.getElementById("c").getContext("2d");
+ctx.scale(2,2); // 390x844論理
+const W=390,H=844,TAU=Math.PI*2;
+// bg
+let g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#101a30"); g.addColorStop(1,"#0a0e1a");
+ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+// 洞窟側壁(ギザギザ)
+function wall(side){ctx.fillStyle="#141d33";ctx.beginPath();const xs=side<0?0:W;ctx.moveTo(xs,0);
+ for(let y=0;y<=H;y+=60){const off=(30+24*Math.sin(y*0.021+side*3))* (side<0?1:-1);ctx.lineTo(xs+off,y);}
+ ctx.lineTo(xs,H);ctx.closePath();ctx.fill();
+ ctx.strokeStyle="#1f2b4a";ctx.lineWidth=2;ctx.stroke();}
+wall(-1);wall(1);
+// トゲ帯(左壁)
+ctx.fillStyle="#ff3b5c";
+for(let i=0;i<5;i++){const y=430+i*16;ctx.beginPath();ctx.moveTo(38,y);ctx.lineTo(58,y+8);ctx.lineTo(38,y+16);ctx.fill();}
+// 壊せる岩(茶系ポリゴン+鉱石)
+function rock(x,y,s,ore){ctx.save();ctx.translate(x,y);ctx.fillStyle="#6d5138";ctx.beginPath();
+ for(let i=0;i<7;i++){const a=i/7*TAU,r=s*(0.85+0.3*Math.sin(i*7+x));ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}
+ ctx.closePath();ctx.fill();ctx.strokeStyle="#523b28";ctx.lineWidth=2.5;ctx.stroke();
+ if(ore){ctx.fillStyle="#ffd166";ctx.globalAlpha=.25;ctx.beginPath();ctx.arc(0,0,s*0.7,0,TAU);ctx.fill();
+ ctx.globalAlpha=1;ctx.beginPath();ctx.arc(0,0,s*0.28,0,TAU);ctx.fill();}
+ ctx.restore();}
+rock(120,585,30,false); rock(305,520,26,true); rock(85,300,24,false); rock(322,700,30,false); rock(150,760,22,true);
+// 鉄骨
+ctx.fillStyle="#7d8cb0";ctx.fillRect(200,620,150,18);ctx.fillStyle="#aebcd8";ctx.fillRect(200,620,150,5);
+ctx.fillStyle="#5f6d92";for(const x of[220,270,320]){ctx.beginPath();ctx.arc(x,632,3,0,TAU);ctx.fill();}
+// 溶岩溜まり(下部)
+g=ctx.createLinearGradient(0,795,0,844);g.addColorStop(0,"#ff5a3c");g.addColorStop(1,"#a02410");
+ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(60,820);ctx.quadraticCurveTo(130,800,200,818);ctx.quadraticCurveTo(260,832,340,812);ctx.lineTo(340,844);ctx.lineTo(60,844);ctx.fill();
+ctx.fillStyle="#ffb03c";ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(150,822,9,0,TAU);ctx.arc(260,824,6,0,TAU);ctx.fill();ctx.globalAlpha=1;
+// チェックポイントリング
+ctx.strokeStyle="#38e1ff";ctx.lineWidth=3;ctx.setLineDash([10,8]);ctx.globalAlpha=.8;
+ctx.beginPath();ctx.ellipse(195,660,120,16,0,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+ctx.fillStyle="#38e1ff";ctx.font="700 11px sans-serif";ctx.textAlign="center";ctx.fillText("CHECKPOINT",195,690);
+// ==== プレイヤー機体(左下へ射撃中、反動で右上へ) ====
+const px=230,py=330,aim=Math.atan2(1,-0.8); // 左下方向
+// トレーサー
+ctx.strokeStyle="#ffde7a";ctx.lineWidth=3;ctx.globalAlpha=.9;
+ctx.beginPath();ctx.moveTo(px+Math.cos(aim)*26,py+Math.sin(aim)*26);ctx.lineTo(px+Math.cos(aim)*150,py+Math.sin(aim)*150);ctx.stroke();
+ctx.globalAlpha=.35;ctx.lineWidth=7;ctx.stroke();ctx.globalAlpha=1;
+// マズルフラッシュ
+ctx.save();ctx.translate(px+Math.cos(aim)*30,py+Math.sin(aim)*30);ctx.rotate(aim);
+ctx.fillStyle="#fff3c4";ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(26,0);ctx.lineTo(0,9);ctx.lineTo(8,0);ctx.closePath();ctx.fill();ctx.restore();
+// 機体(反動方向=右上に傾く)
+ctx.save();ctx.translate(px,py);ctx.rotate(-0.35);
+ctx.shadowColor="#38e1ff";ctx.shadowBlur=16;
+ctx.fillStyle="#eaf6ff";ctx.beginPath();ctx.roundRect(-16,-20,32,36,12);ctx.fill();ctx.shadowBlur=0;
+ctx.fillStyle="#38e1ff";ctx.beginPath();ctx.arc(0,-6,7,0,TAU);ctx.fill();
+ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(-2,-8,2.5,0,TAU);ctx.fill();
+// ガン
+ctx.rotate(0.35);ctx.rotate(aim);ctx.fillStyle="#4a5470";ctx.fillRect(8,-4,24,8);ctx.restore();
+// 反動ベクトル矢印(モック用注釈)
+ctx.strokeStyle="#ff4fa3";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(px+14,py-16);ctx.lineTo(px+52,py-58);ctx.stroke();
+ctx.fillStyle="#ff4fa3";ctx.beginPath();ctx.moveTo(px+58,py-64);ctx.lineTo(px+40,py-58);ctx.lineTo(px+52,py-46);ctx.closePath();ctx.fill();
+ctx.font="700 11px sans-serif";ctx.textAlign="left";ctx.fillText("反動",px+60,py-52);
+// 薬莢
+ctx.fillStyle="#ffd166";for(const[sx,sy,r]of[[px+24,py+8,0.5],[px+34,py+2,1.2],[px+28,py+18,2]]){ctx.save();ctx.translate(sx,sy);ctx.rotate(r);ctx.fillRect(-3,-1.5,6,3);ctx.restore();}
+// 破壊中の岩+破片(左下、着弾点)
+const bx=px+Math.cos(aim)*150, by=py+Math.sin(aim)*150;
+ctx.fillStyle="#6d5138";for(let i=0;i<8;i++){const a=i/8*TAU;ctx.save();ctx.translate(bx+Math.cos(a)*(14+i*3),by+Math.sin(a)*(10+i*2));ctx.rotate(a);ctx.fillRect(-4,-3,8,6);ctx.restore();}
+ctx.strokeStyle="#fff";ctx.globalAlpha=.8;ctx.lineWidth=2;ctx.beginPath();ctx.arc(bx,by,20,0,TAU);ctx.stroke();ctx.globalAlpha=1;
+// 吸引される弾破片(点線軌跡)
+ctx.strokeStyle="#ffde7a";ctx.setLineDash([3,5]);ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(bx+10,by-6);ctx.quadraticCurveTo((bx+px)/2+30,(by+py)/2,px+6,py+12);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle="#ffde7a";ctx.beginPath();ctx.arc(bx+10,by-6,4,0,TAU);ctx.fill();
+ctx.font="700 10px sans-serif";ctx.fillText("破片=弾補給",bx+20,by-14);
+// ==== HUD ====
+ctx.textAlign="left";
+// AMMO(最重要)
+ctx.fillStyle="#7f8db4";ctx.font="700 11px sans-serif";ctx.fillText("AMMO",16,30);
+ctx.fillStyle="#ffde7a";ctx.fillRect(16,38,7,14);ctx.beginPath();ctx.arc(19.5,38,3.5,Math.PI,0);ctx.fill();
+ctx.fillStyle="#eaf6ff";ctx.font="900 30px sans-serif";ctx.fillText("23",32,62);
+// コイン
+ctx.save();ctx.translate(22,86);ctx.rotate(Math.PI/4);ctx.fillStyle="#ffd166";ctx.fillRect(-5,-5,10,10);ctx.restore();
+ctx.fillStyle="#ffd166";ctx.font="800 15px sans-serif";ctx.fillText("34",34,92);
+// 深度(中央)
+ctx.textAlign="center";ctx.fillStyle="#eaf6ff";ctx.font="900 32px sans-serif";ctx.fillText("132m",W/2,52);
+ctx.fillStyle="#7f8db4";ctx.font="700 11px sans-serif";ctx.fillText("採掘孔イントロ / 150m",W/2,72);
+// HP(右上ダイヤ)
+for(let i=0;i<3;i++){ctx.save();ctx.translate(W-70+i*20,36);ctx.rotate(Math.PI/4);
+ ctx.fillStyle=i<2?"#7dff8a":"rgba(0,0,0,0)";ctx.strokeStyle=i<2?"#7dff8a":"#7f8db4";ctx.lineWidth=1.5;
+ if(i<2)ctx.fillRect(-5,-5,10,10);else ctx.strokeRect(-5,-5,10,10);ctx.restore();}
+// 速度警告(機体の状態色の凡例代わり)
+ctx.textAlign="right";ctx.fillStyle="#ffb03c";ctx.font="700 11px sans-serif";ctx.fillText("▼ 降下速度: 注意",W-16,66);
+// 深度メーター(右端)
+ctx.strokeStyle="#7f8db4";ctx.globalAlpha=.5;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(W-12,240);ctx.lineTo(W-12,620);ctx.stroke();ctx.globalAlpha=1;
+ctx.fillStyle="#38e1ff";ctx.beginPath();ctx.arc(W-12,470,4,0,TAU);ctx.fill(); // CP
+ctx.fillStyle="#ffd166";ctx.beginPath();ctx.arc(W-12,610,5,0,TAU);ctx.fill(); // pad
+ctx.fillStyle="#3ec6ff";ctx.beginPath();ctx.moveTo(W-20,558);ctx.lineTo(W-12,564);ctx.lineTo(W-20,570);ctx.fill(); // 自機
+// 下部ヒント
+ctx.textAlign="center";ctx.fillStyle="#7f8db4";ctx.font="700 12px sans-serif";
+ctx.fillText("タッチした方向に射撃 — 反動で逆へ飛ぶ",W/2,H-30);
+ctx.fillText("下に撃ってブレーキ / 岩を壊して弾を補給",W/2,H-12);
+</script>
