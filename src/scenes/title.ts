@@ -5,21 +5,24 @@ import { sfxStart } from "../audio/sfx.ts";
 import { COLORS } from "../game/config.ts";
 import { STAGES } from "../game/stages.ts";
 import { loadSave } from "../game/save.ts";
-import { drawCoinIcon } from "../render/hud.ts";
+import { drawGemIcon } from "../render/hud.ts";
 import { drawBackground } from "../render/renderer.ts";
 import { StageSelectScene } from "./stageselect.ts";
 
 export class TitleScene implements Scene {
   private t = 0;
-  private coins = 0;
-  private clearedCount = 0;
+  private gems = 0;
+  private starCount = 0;
 
   constructor(private app: App) {}
 
   enter(): void {
     const save = loadSave();
-    this.coins = save.coins;
-    this.clearedCount = Object.values(save.stages).filter((s) => s.cleared).length;
+    this.gems = save.gems;
+    this.starCount = Object.values(save.stages).reduce(
+      (s, r) => s + r.stars.filter(Boolean).length,
+      0,
+    );
   }
 
   update(dt: number): void {
@@ -28,53 +31,51 @@ export class TitleScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     const { vp } = this.app;
-    const { w, h, unit } = vp;
+    const { w, h, unit: u } = vp;
     drawBackground(ctx, vp);
 
-    // 背景: 地層のバンド
-    const bands = ["#141d33", "#20283f", "#3a2f2a", "#57422f", "#6b4a35"];
-    bands.forEach((c, i) => {
-      ctx.fillStyle = c;
-      ctx.globalAlpha = 0.7;
-      ctx.fillRect(0, h * (0.42 + i * 0.13), w, h * 0.14);
-    });
-    ctx.globalAlpha = 1;
+    // 背景: 縦穴イメージ(左右の壁)
+    ctx.fillStyle = "#141d33";
+    ctx.fillRect(0, h * 0.3, w * 0.16, h);
+    ctx.fillRect(w * 0.84, h * 0.3, w * 0.16, h);
 
-    // デモ機体(ゆっくり上下, ドリル回転)
-    const mx = w / 2;
-    const my = h * 0.46 + Math.sin(this.t * 1.4) * 6 * unit;
-    const s = 34 * unit;
+    // デモ機体: 下に射撃しながらホバー
+    const mx = w / 2 + Math.sin(this.t * 1.1) * 24 * u;
+    const my = h * 0.5 + Math.sin(this.t * 2.3) * 10 * u;
+    const r = 15 * u;
+    // トレーサー
+    if (Math.sin(this.t * 14) > -0.3) {
+      ctx.strokeStyle = COLORS.ammo;
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = 2.5 * u;
+      ctx.beginPath();
+      ctx.moveTo(mx, my + r);
+      ctx.lineTo(mx + Math.sin(this.t * 7) * 12 * u, my + r + 90 * u);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#fff3c4";
+      ctx.beginPath();
+      ctx.moveTo(mx - 5 * u, my + r);
+      ctx.lineTo(mx, my + r + 14 * u);
+      ctx.lineTo(mx + 5 * u, my + r);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.save();
     ctx.translate(mx, my);
-    // バネ
-    ctx.strokeStyle = COLORS.tier[1];
-    ctx.lineWidth = 3 * unit;
+    ctx.fillStyle = COLORS.player;
+    ctx.shadowColor = COLORS.aim;
+    ctx.shadowBlur = 16 * u;
     ctx.beginPath();
-    const squash = 0.75 + 0.25 * Math.sin(this.t * 2.2);
-    for (let i = 0; i <= 8; i++) {
-      const yy = -s * 0.9 - s * 0.7 * squash * (1 - i / 8);
-      ctx.lineTo((i % 2 === 0 ? -1 : 1) * s * 0.4, yy);
-    }
-    ctx.stroke();
-    // 本体
-    ctx.fillStyle = COLORS.machine;
-    ctx.beginPath();
-    ctx.roundRect(-s * 0.75, -s * 0.85, s * 1.5, s * 1.15, s * 0.4);
+    ctx.roundRect(-r, -r, r * 2, r * 2, r * 0.55);
     ctx.fill();
-    ctx.fillStyle = COLORS.drill;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = COLORS.aim;
     ctx.beginPath();
-    ctx.arc(0, -s * 0.32, s * 0.28, 0, TAU);
+    ctx.arc(0, -r * 0.15, r * 0.42, 0, TAU);
     ctx.fill();
-    // ドリル
-    ctx.fillStyle = COLORS.tier[2];
-    ctx.shadowColor = COLORS.tier[2];
-    ctx.shadowBlur = 16 * unit;
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.65, s * 0.3);
-    ctx.lineTo(s * 0.65, s * 0.3);
-    ctx.lineTo(0, s * 1.35);
-    ctx.closePath();
-    ctx.fill();
+    ctx.fillStyle = "#4a5470";
+    ctx.fillRect(-2.6 * u, r * 0.3, 5.2 * u, r * 1.3);
     ctx.restore();
 
     // ロゴ
@@ -82,33 +83,38 @@ export class TitleScene implements Scene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = COLORS.text;
-    ctx.font = `900 ${44 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.shadowColor = COLORS.drill;
-    ctx.shadowBlur = 24 * unit;
-    ctx.fillText("SPRING DRILL", w / 2, h * 0.15);
+    ctx.font = `900 ${42 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.shadowColor = COLORS.aim;
+    ctx.shadowBlur = 22 * u;
+    ctx.fillText("RECOIL DIVER", w / 2, h * 0.15);
     ctx.shadowBlur = 0;
     ctx.fillStyle = COLORS.textDim;
-    ctx.font = `700 ${16 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("― ためて、ぶちぬけ。―", w / 2, h * 0.15 + 40 * unit);
+    ctx.font = `700 ${15 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("― 撃て。反動で、降りろ。―", w / 2, h * 0.15 + 38 * u);
 
     // 進行サマリ
-    if (this.coins > 0 || this.clearedCount > 0) {
-      drawCoinIcon(ctx, w / 2 - 52 * unit, h * 0.25, 10 * unit);
-      ctx.fillStyle = COLORS.coin;
+    if (this.gems > 0 || this.starCount > 0) {
+      drawGemIcon(ctx, w / 2 - 60 * u, h * 0.24, 8 * u);
+      ctx.fillStyle = COLORS.gem;
       ctx.textAlign = "left";
-      ctx.font = `800 ${14 * unit}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(String(this.coins), w / 2 - 40 * unit, h * 0.25);
+      ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(String(this.gems), w / 2 - 48 * u, h * 0.24);
       ctx.fillStyle = COLORS.textDim;
-      ctx.fillText(`クリア ${this.clearedCount}/${STAGES.length}`, w / 2 + 10 * unit, h * 0.25);
+      ctx.fillText(`★ ${this.starCount}/${STAGES.length * 3}`, w / 2 + 12 * u, h * 0.24);
       ctx.textAlign = "center";
     }
 
-    // スタート(点滅)
+    // 操作説明
+    ctx.fillStyle = COLORS.aim;
+    ctx.font = `700 ${13 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("タッチした方向に射撃 → 反動で逆へ飛ぶ", w / 2, h * 0.76);
+    ctx.fillStyle = COLORS.gem;
+    ctx.fillText("岩をこわすと弾が出る / 白い敵はふめる", w / 2, h * 0.76 + 22 * u);
+
     ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.t * 4);
     ctx.fillStyle = COLORS.text;
-    ctx.font = `800 ${18 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("TAP TO START", w / 2, h * 0.87);
-    ctx.globalAlpha = 1;
+    ctx.font = `800 ${18 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("TAP TO START", w / 2, h * 0.88);
     ctx.restore();
   }
 

@@ -1,253 +1,318 @@
-import { GRID, TILE_DEFS } from "./config.ts";
-import { CHAR_TILES } from "./terrain.ts";
+import type { EnemyKind, TileKind } from "./config.ts";
+import { GRID, TILE_DROPS, PLAYER } from "./config.ts";
+import type { CompiledStage } from "./terrain.ts";
+import { CHAR_TILES, compileRows } from "./terrain.ts";
 
 /**
- * ステージ定義。rows は1行=7文字の文字列(記号は terrain.ts の CHAR_TILES):
- *   . 土   _ 空洞   R 岩(Lv1)   S 鉄骨(Lv2)   o 鉱石   G ジェム   L 溶岩   g ガス   C コア
- * parTime はタイムボーナスの基準秒(制限時間ではない)。
- * palette は地層の色(上→下へ深度で補間)。
+ * ステージは「チャンク(数行の設計パーツ)」を縦に並べて合成する。
+ * チャンク行は幅13文字。記号: # 壁 / . 空 / r 岩 / h 硬岩 / o 鉱石 / g ガラス床
+ * ^ トゲ / L 溶岩 / P 着地パッド / c CP行 / 1 フワリ / 2 トゲマル / 3 砲台貝
  */
+interface Chunk {
+  rows: string[];
+  /** 横風: -1=左, +1=右(このチャンクの行範囲に適用) */
+  wind?: number;
+}
+
+const C: Record<string, Chunk> = {
+  intro: {
+    rows: [
+      "#...........#",
+      "#...........#",
+      "#....r.r....#",
+      "#...........#",
+      "#..r......r.#",
+      "#...........#",
+    ],
+  },
+  rocksA: {
+    rows: [
+      "#...........#",
+      "#..r...r....#",
+      "#...........#",
+      "#....rr.....#",
+      "#.r.......r.#",
+      "#......r....#",
+      "#...........#",
+    ],
+  },
+  rocksB: {
+    rows: [
+      "#...........#",
+      "#....r...r..#",
+      "#.r.........#",
+      "#.....rr....#",
+      "#..r......r.#",
+      "#...........#",
+    ],
+  },
+  oreL: {
+    rows: [
+      "#...........#",
+      "#oo.........#",
+      "#ro..r......#",
+      "#...........#",
+      "#......ro...#",
+      "#.........oo#",
+      "#...........#",
+    ],
+  },
+  oreR: {
+    rows: [
+      "#...........#",
+      "#.........oo#",
+      "#......r..or#",
+      "#...........#",
+      "#...or......#",
+      "#oo.........#",
+      "#...........#",
+    ],
+  },
+  fuwari1: {
+    rows: [
+      "#...........#",
+      "#....1......#",
+      "#...........#",
+      "#.r.......r.#",
+      "#........1..#",
+      "#...........#",
+    ],
+  },
+  fuwari2: {
+    rows: [
+      "#...........#",
+      "#..1....1...#",
+      "#...........#",
+      "#.....r.....#",
+      "#...........#",
+    ],
+  },
+  ledges: {
+    rows: [
+      "#...........#",
+      "#.^^^.......#",
+      "#.###.......#",
+      "#...........#",
+      "#.......^^^.#",
+      "#.......###.#",
+      "#...........#",
+    ],
+  },
+  narrow: {
+    rows: [
+      "#...........#",
+      "##.........##",
+      "###...r...###",
+      "####......###",
+      "###.......###",
+      "##.....r...##",
+      "#...........#",
+    ],
+  },
+  hardGate: {
+    rows: [
+      "#...........#",
+      "#..hhh......#",
+      "#...........#",
+      "#......hhh..#",
+      "#...........#",
+    ],
+  },
+  toge: {
+    rows: [
+      "#...........#",
+      "#....2......#",
+      "#...........#",
+      "#..r.....r..#",
+      "#.......2...#",
+      "#...........#",
+    ],
+  },
+  glass: {
+    rows: [
+      "#...........#",
+      "#..ggggg....#",
+      "#...........#",
+      "#....ggggg..#",
+      "#...........#",
+    ],
+  },
+  houdaiL: {
+    rows: [
+      "#...........#",
+      "#3..........#",
+      "#...........#",
+      "#......r....#",
+      "#...........#",
+    ],
+  },
+  houdaiR: {
+    rows: [
+      "#...........#",
+      "#..........3#",
+      "#...........#",
+      "#...r.......#",
+      "#...........#",
+    ],
+  },
+  lavaPool: {
+    rows: [
+      "#...........#",
+      "#...........#",
+      "#LLL.....LLL#",
+      "#####...#####",
+      "#...........#",
+    ],
+  },
+  cavern: {
+    rows: [
+      "#...........#",
+      "#...........#",
+      "#.....1.....#",
+      "#...........#",
+      "#...........#",
+      "#..1.....1..#",
+      "#...........#",
+      "#...........#",
+    ],
+  },
+  cp: {
+    rows: [
+      "#...........#",
+      "#c..........#",
+      "#...........#",
+    ],
+  },
+  pad: {
+    rows: [
+      "#...........#",
+      "#...........#",
+      "#...........#",
+      "####PPPPP####",
+      "#############",
+    ],
+  },
+};
+
+const windL = (name: string): Chunk => ({ rows: C[name].rows, wind: -1 });
+const windR = (name: string): Chunk => ({ rows: C[name].rows, wind: 1 });
+
 export interface StageDef {
   id: number;
   name: string;
   parTime: number;
+  /** 地層の基調色(浅→深) */
   palette: string[];
-  rows: string[];
+  chunks: Chunk[];
 }
 
 export const STAGES: StageDef[] = [
   {
     id: 1,
-    name: "やわらかい地層",
-    parTime: 35,
-    palette: ["#7a5a3f", "#6b4a35", "#59392c"],
-    rows: [
-      ".......",
-      "...o...",
-      ".......",
-      "..o....",
-      ".......",
-      "...R...",
-      ".......",
-      ".o...o.",
-      "._.....",
-      "..RR...",
-      ".......",
-      "....o..",
-      ".R...R.",
-      ".......",
-      "..o.o..",
-      "...R...",
-      ".......",
-      "L......",
-      ".......",
-      "..o....",
-      "......L",
-      ".......",
-      "..RRR..",
-      "._...o.",
-      "...G...",
-      ".......",
-      "...C...",
-      "SSSSSSS",
+    name: "採掘孔イントロ",
+    parTime: 45,
+    palette: ["#233150", "#1e2a46", "#19233c"],
+    chunks: [
+      C.intro, C.rocksA, C.fuwari1, C.oreL, C.cp,
+      C.rocksB, C.fuwari2, C.ledges, C.oreR, C.cp,
+      C.rocksA, C.fuwari1, C.rocksB, C.pad,
     ],
   },
   {
     id: 2,
-    name: "鉄骨とマグマ",
-    parTime: 60,
-    palette: ["#5a5f4a", "#4a4f42", "#3a4038", "#2e3a38"],
-    rows: [
-      ".......",
-      "..o....",
-      ".......",
-      "....o..",
-      ".R.....",
-      ".......",
-      ".SSSSS.",
-      ".......",
-      "..o..o.",
-      "L......",
-      ".......",
-      "...R...",
-      ".o.....",
-      ".......",
-      "SSSSS..",
-      "......L",
-      "..g.o..",
-      ".o.g...",
-      ".......",
-      "....R..",
-      "L......",
-      ".......",
-      "..SSSSS",
-      ".......",
-      ".o...o.",
-      "...L...",
-      ".g.....",
-      "....o..",
-      ".......",
-      "R..R...",
-      ".......",
-      "......L",
-      "..o....",
-      ".......",
-      ".RRRR..",
-      "....._.",
-      "..G....",
-      ".......",
-      "..C....",
-      "SSSSSSS",
+    name: "風の断層",
+    parTime: 70,
+    palette: ["#1e3242", "#192c3e", "#142536"],
+    chunks: [
+      C.intro, C.rocksA, C.toge, C.cp,
+      windR("rocksB"), windR("fuwari2"), windR("oreL"), C.cp,
+      C.narrow, C.toge, C.ledges, C.cp,
+      windL("rocksA"), windL("oreR"), C.fuwari1, C.hardGate, C.pad,
     ],
   },
   {
     id: 3,
-    name: "コアの間",
-    parTime: 90,
-    palette: ["#4a3f5e", "#3c3452", "#2e2a46", "#231f3a"],
-    rows: [
-      ".......",
-      "...o...",
-      ".R.....",
-      ".......",
-      "....o..",
-      ".......",
-      "..RRR..",
-      "L......",
-      ".......",
-      ".o..g..",
-      ".......",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "...R...",
-      "..o.o..",
-      ".......",
-      "L......",
-      ".L.....",
-      "..L....",
-      "...L...",
-      "....L..",
-      ".....L.",
-      "....L..",
-      "...L...",
-      "..L....",
-      ".......",
-      ".G.g.G.",
-      ".g...o.",
-      ".......",
-      "SSSS...",
-      ".......",
-      "..o..R.",
-      ".......",
-      "...SSSS",
-      "L......",
-      ".......",
-      "..RR...",
-      ".......",
-      "....o..",
-      ".R.....",
-      "..G....",
-      ".......",
-      "..SSS..",
-      "..S.C..",
-      "..SSS..",
-      ".......",
-      "SSSSSSS",
+    name: "溶岩大空洞",
+    parTime: 95,
+    palette: ["#33202e", "#2b1b28", "#221520"],
+    chunks: [
+      C.intro, C.rocksB, C.houdaiL, C.cp,
+      C.glass, C.lavaPool, C.fuwari2, C.cp,
+      C.cavern, C.houdaiR, C.glass, C.cp,
+      C.toge, C.lavaPool, C.hardGate, C.houdaiL, C.pad,
     ],
   },
 ];
 
+/** チャンクを連結してステージをコンパイル */
+export function buildStage(def: StageDef): CompiledStage {
+  const rows: string[] = [];
+  const winds: [number, number, number][] = [];
+  for (const ch of def.chunks) {
+    if (ch.wind) winds.push([rows.length, rows.length + ch.rows.length, ch.wind * 5.5]);
+    rows.push(...ch.rows);
+  }
+  return compileRows(rows, winds);
+}
+
 /**
- * dev用バリデータ。理不尽・詰みを機械的に排除する:
- *  1) 全行が7文字・未知文字なし・コアがちょうど1個
- *  2) 到達可能性: 「無強化(Lv1ダッシュ=岩まで破壊+土の横掘り)」で地表からコアへ
- *     ノーダメージ経路が存在する(ガス・溶岩・鉄骨は通れない扱いのBFS)
- *  3) 溶岩を含む行には安全列(溶岩でない列)が2列以上あり、
- *     直上行の安全列と隣接している(強制被弾の禁止)
+ * devバリデータ。理不尽・詰みの機械検出:
+ *  1) 全行が13文字・未知文字なし・パッドあり
+ *  2) パッドより上の全行に「通行可能な連続2マス以上の隙間」がある(通行=壁/トゲ/溶岩以外。破壊可含む)
+ *  3) 弾収支ヒューリスティック: CP区間ごとの入手可能弾 ≥ 想定消費(行数×1.2)
  */
 export function validateStage(def: StageDef): string[] {
   const errors: string[] = [];
-  const cols = GRID.COLS;
-  let coreCount = 0;
+  const compiled = buildStage(def);
+  const t = compiled.terrain;
+  const rows: string[] = def.chunks.flatMap((c) => c.rows);
 
-  def.rows.forEach((line, r) => {
-    if (line.length !== cols) errors.push(`row ${r}: 長さが${line.length}(7必要)`);
-    for (const ch of line) {
-      if (!(ch in CHAR_TILES)) errors.push(`row ${r}: 未知の文字 "${ch}"`);
-      if (ch === "C") coreCount++;
-    }
+  rows.forEach((line, r) => {
+    if (line.length !== GRID.COLS) errors.push(`row ${r}: 幅${line.length}(13必要)`);
+    for (const ch of line) if (!(ch in CHAR_TILES)) errors.push(`row ${r}: 未知の文字 "${ch}"`);
   });
-  if (coreCount !== 1) errors.push(`コアが${coreCount}個(1個必要)`);
-  if (errors.length > 0) return errors; // 形が壊れていたら以降は無意味
+  if (t.padRow < 0) errors.push("着地パッドがない");
+  if (errors.length > 0) return errors;
 
-  const kind = (c: number, r: number) => CHAR_TILES[def.rows[r][c]];
-  // 無強化で通行可能: 土/空洞/鉱石/ジェム/岩(Lv1で壊せる)/コア。鉄骨・溶岩・ガスは不可
-  const passable = (c: number, r: number) => {
-    const k = kind(c, r);
-    return !TILE_DEFS[k].hazard && TILE_DEFS[k].hardness <= 1;
-  };
+  // 通行可能ギャップ
+  const passable = (k: TileKind) => k !== "wall" && k !== "spike" && k !== "lava";
+  for (let r = 0; r < t.padRow; r++) {
+    let best = 0;
+    let run = 0;
+    for (let c2 = 0; c2 < t.cols; c2++) {
+      run = passable(t.tiles[r * t.cols + c2]) ? run + 1 : 0;
+      best = Math.max(best, run);
+    }
+    if (best < 2) errors.push(`row ${r}: 通行可能な隙間(2マス)がない`);
+  }
 
-  // BFS(地表=row0の通行可能な全列からスタート)
-  const R = def.rows.length;
-  const seen = new Set<number>();
-  const queue: [number, number][] = [];
-  for (let c = 0; c < cols; c++) {
-    if (passable(c, 0)) {
-      queue.push([c, 0]);
-      seen.add(c);
+  // 弾収支(CP区間ごと)
+  const cps = [0, ...t.checkpoints, t.rows];
+  for (let s = 0; s < cps.length - 1; s++) {
+    const [a, b] = [cps[s], cps[s + 1]];
+    let supply = s === 0 ? PLAYER.AMMO_START : PLAYER.CP_AMMO;
+    for (let r = a; r < b; r++) {
+      for (let c2 = 0; c2 < t.cols; c2++) {
+        const k = t.tiles[r * t.cols + c2];
+        const drop = TILE_DROPS[k];
+        if (drop) supply += drop.ammoShards * 2;
+      }
+    }
+    for (const e of compiled.enemies) {
+      if (e.row >= a && e.row < b) supply += 6; // 踏み/撃破ドロップの概算
+    }
+    const need = (b - a) * 1.2;
+    if (supply < need) {
+      errors.push(`CP区間${s}(${a}-${b}m): 弾収支不足 供給${supply} < 想定消費${Math.round(need)}`);
     }
   }
-  let reached = false;
-  while (queue.length > 0) {
-    const [c, r] = queue.shift()!;
-    if (kind(c, r) === "core") {
-      reached = true;
-      break;
-    }
-    for (const [dc, dr] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      const nc = c + dc;
-      const nr = r + dr;
-      if (nc < 0 || nc >= cols || nr < 0 || nr >= R) continue;
-      const id = nr * cols + nc;
-      if (seen.has(id) || !passable(nc, nr)) continue;
-      seen.add(id);
-      queue.push([nc, nr]);
-    }
-  }
-  if (!reached) errors.push("無強化(Lv1+土横掘り)でコアに到達できない");
-
-  // 溶岩行の安全性
-  def.rows.forEach((line, r) => {
-    if (!line.includes("L")) return;
-    const safe = (row: string) =>
-      [...row].map((ch, i) => (ch !== "L" ? i : -1)).filter((i) => i >= 0);
-    const cur = safe(line);
-    if (cur.length < 2) errors.push(`row ${r}: 溶岩行の安全列が${cur.length}列(2列以上必要)`);
-    if (r > 0) {
-      const above = new Set(safe(def.rows[r - 1]));
-      const linked = cur.some((c) => above.has(c - 1) || above.has(c) || above.has(c + 1));
-      if (!linked) errors.push(`row ${r}: 直上行の安全列と隣接していない(強制被弾)`);
-    }
-  });
-
   return errors;
 }
 
 export function validateAllStages(): void {
   for (const s of STAGES) {
-    const errors = validateStage(s);
-    for (const e of errors) console.error(`[stage ${s.id} ${s.name}] ${e}`);
+    for (const e of validateStage(s)) console.error(`[stage ${s.id} ${s.name}] ${e}`);
   }
 }
+
+export type { EnemyKind };

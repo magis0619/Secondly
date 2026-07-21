@@ -5,14 +5,13 @@ import { COLORS } from "../game/config.ts";
 import type { SaveData } from "../game/save.ts";
 import { loadSave } from "../game/save.ts";
 import { STAGES } from "../game/stages.ts";
-import { drawCoinIcon, formatScore } from "../render/hud.ts";
+import { drawGemIcon, formatScore } from "../render/hud.ts";
 import { drawBackground } from "../render/renderer.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
 import { PlayScene } from "./play.ts";
 import { ShopScene } from "./shop.ts";
 
-/** ステージ選択(進行マップ)。縦に並ぶノード+ショップ導線 */
 export class StageSelectScene implements Scene {
   private t = 0;
   private save: SaveData = loadSave();
@@ -31,97 +30,96 @@ export class StageSelectScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     const { vp } = this.app;
-    const { w, h, unit, safeTop, safeBottom } = vp;
+    const { w, h, unit: u, safeTop, safeBottom } = vp;
     drawBackground(ctx, vp);
 
     ctx.save();
     ctx.textBaseline = "middle";
-
-    // ヘッダ
     ctx.textAlign = "center";
     ctx.fillStyle = COLORS.text;
-    ctx.font = `900 ${24 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("ステージ", w / 2, safeTop + 34 * unit);
-    drawCoinIcon(ctx, w - 74 * unit, safeTop + 34 * unit, 9 * unit);
+    ctx.font = `900 ${24 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("ステージ", w / 2, safeTop + 34 * u);
+    drawGemIcon(ctx, w - 76 * u, safeTop + 34 * u, 8 * u);
     ctx.textAlign = "left";
-    ctx.fillStyle = COLORS.coin;
-    ctx.font = `800 ${15 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(String(this.save.coins), w - 62 * unit, safeTop + 34 * unit);
+    ctx.fillStyle = COLORS.gem;
+    ctx.font = `800 ${15 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText(String(this.save.gems), w - 64 * u, safeTop + 34 * u);
 
-    // ノード(縦、上から1→3。掘り進むイメージで下ほど深い)
     this.nodeRects = [];
-    const startY = safeTop + 90 * unit;
-    const gapY = 120 * unit;
+    const startY = safeTop + 96 * u;
+    const gapY = 122 * u;
     STAGES.forEach((stage, i) => {
       const y = startY + i * gapY;
       const locked = stage.id > this.save.stageUnlocked;
       const rec = this.save.stages[stage.id];
-      const r: Rect = { x: w / 2 - 140 * unit, y: y - 40 * unit, w: 280 * unit, h: 84 * unit };
+      const r: Rect = { x: w / 2 - 145 * u, y: y - 42 * u, w: 290 * u, h: 88 * u };
       this.nodeRects.push(r);
 
-      // 接続線
       if (i < STAGES.length - 1) {
         ctx.strokeStyle = COLORS.textDim;
         ctx.globalAlpha = 0.4;
-        ctx.setLineDash([4 * unit, 6 * unit]);
-        ctx.lineWidth = 2 * unit;
+        ctx.setLineDash([4 * u, 6 * u]);
+        ctx.lineWidth = 2 * u;
         ctx.beginPath();
-        ctx.moveTo(w / 2, y + 44 * unit);
-        ctx.lineTo(w / 2, y + gapY - 44 * unit);
+        ctx.moveTo(w / 2, y + 46 * u);
+        ctx.lineTo(w / 2, y + gapY - 46 * u);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.globalAlpha = 1;
       }
 
-      // カード
       ctx.fillStyle = locked ? "#151d33" : "#1c2743";
       ctx.beginPath();
-      ctx.roundRect(r.x, r.y, r.w, r.h, 14 * unit);
+      ctx.roundRect(r.x, r.y, r.w, r.h, 14 * u);
       ctx.fill();
-      if (!locked && stage.id === this.save.stageUnlocked && !rec?.cleared) {
-        // 現在挑戦中のステージを光らせる
-        ctx.strokeStyle = COLORS.drill;
+      if (!locked && stage.id === this.save.stageUnlocked && !rec?.stars[0]) {
+        ctx.strokeStyle = COLORS.aim;
         ctx.globalAlpha = 0.5 + 0.4 * Math.sin(this.t * 4);
-        ctx.lineWidth = 2.5 * unit;
+        ctx.lineWidth = 2.5 * u;
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
 
       // 番号バッジ
-      ctx.fillStyle = locked ? "#2a3352" : rec?.cleared ? "#2c8a4f" : COLORS.tier[2];
+      ctx.fillStyle = locked ? "#2a3352" : rec?.stars[0] ? "#2c8a4f" : COLORS.tier[2];
       ctx.beginPath();
-      ctx.arc(r.x + 42 * unit, y, 26 * unit, 0, Math.PI * 2);
+      ctx.arc(r.x + 42 * u, y - 6 * u, 24 * u, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = locked ? COLORS.textDim : "#ffffff";
       ctx.textAlign = "center";
-      ctx.font = `900 ${20 * unit}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(locked ? "🔒" : rec?.cleared ? "✓" : String(stage.id), r.x + 42 * unit, y + 1 * unit);
+      ctx.font = `900 ${18 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(locked ? "🔒" : String(stage.id), r.x + 42 * u, y - 5 * u);
+      // 星
+      ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;
+      const stars = rec?.stars ?? [false, false, false];
+      ctx.fillStyle = COLORS.gem;
+      ctx.fillText(
+        stars.map((s) => (s ? "★" : "☆")).join(""),
+        r.x + 42 * u,
+        y + 26 * u,
+      );
 
-      // 名前・記録
       ctx.textAlign = "left";
       ctx.fillStyle = locked ? COLORS.textDim : COLORS.text;
-      ctx.font = `800 ${16 * unit}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(`${stage.id}. ${stage.name}`, r.x + 80 * unit, y - 12 * unit);
-      ctx.font = `700 ${11 * unit}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `800 ${15 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(`${stage.id}. ${stage.name}`, r.x + 82 * u, y - 14 * u);
+      ctx.font = `700 ${10.5 * u}px -apple-system, system-ui, sans-serif`;
       ctx.fillStyle = COLORS.textDim;
       if (locked) {
-        ctx.fillText("まえのステージをクリアでかいほう", r.x + 80 * unit, y + 12 * unit);
-      } else if (rec?.cleared) {
-        const sec = (rec.bestTimeMs / 1000).toFixed(1);
-        ctx.fillText(`ベスト ${formatScore(rec.bestScore)} ・ ${sec}s`, r.x + 80 * unit, y + 12 * unit);
+        ctx.fillText("まえのステージをクリアでかいほう", r.x + 82 * u, y + 10 * u);
+      } else if (rec?.stars[0]) {
+        ctx.fillText(
+          `ベスト ${formatScore(rec.bestScore)} ・ ${(rec.bestTimeMs / 1000).toFixed(1)}s`,
+          r.x + 82 * u,
+          y + 10 * u,
+        );
       } else {
-        ctx.fillText(`ふかさ ${stage.rows.length}m ・ めやす ${stage.parTime}s`, r.x + 80 * unit, y + 12 * unit);
+        ctx.fillText(`ふかさ ${buildDepth(stage.id)}m ・ めやす ${stage.parTime}s`, r.x + 82 * u, y + 10 * u);
       }
     });
 
-    // ショップボタン
-    this.shopRect = {
-      x: w / 2 - 110 * unit,
-      y: h - safeBottom - 78 * unit,
-      w: 220 * unit,
-      h: 52 * unit,
-    };
-    drawButton(ctx, unit, this.shopRect, "🔧 アップグレード", { bg: "#25314f", fg: COLORS.text });
+    this.shopRect = { x: w / 2 - 110 * u, y: h - safeBottom - 78 * u, w: 220 * u, h: 52 * u };
+    drawButton(ctx, u, this.shopRect, "🔧 アップグレード", { bg: "#25314f", fg: COLORS.text });
     ctx.restore();
   }
 
@@ -143,4 +141,9 @@ export class StageSelectScene implements Scene {
       return;
     }
   }
+}
+
+function buildDepth(stageId: number): number {
+  const def = STAGES.find((s) => s.id === stageId)!;
+  return def.chunks.reduce((n, c) => n + c.rows.length, 0);
 }

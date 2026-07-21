@@ -6,7 +6,6 @@ import { getAudio, getNoiseBuffer } from "./audio.ts";
 
 type Wave = OscillatorType;
 
-/** 単発オシレータ。減衰エンベロープ+任意のピッチスライド */
 function tone(
   freq: number,
   dur: number,
@@ -28,7 +27,6 @@ function tone(
   osc.stop(t0 + dur + 0.02);
 }
 
-/** ノイズバースト(フィルタ経由) */
 function noise(
   dur: number,
   opts: { gain?: number; filter?: BiquadFilterType; freq?: number; freqTo?: number; q?: number; delay?: number } = {},
@@ -53,98 +51,127 @@ function noise(
   src.stop(t0 + dur + 0.02);
 }
 
-/** 土を掘る小さなザクザク */
-export function sfxDig(): void {
-  noise(0.04, { filter: "lowpass", freq: 900, gain: 0.07 });
-}
-
-/** 岩・鉄骨の破壊(ダッシュ貫通)。連続で鳴るのでコンボ位置でピッチが上がる */
-export function sfxSmash(index: number, steel: boolean): void {
-  const f = 200 + Math.min(index, 12) * 40;
-  tone(f, 0.08, { type: "square", gain: 0.16, slideTo: f * 0.6 });
-  noise(0.07, { freq: steel ? 2800 : 1600, freqTo: 500, gain: 0.2 });
-}
-
-/** ティア不足で弾かれた(ガキン)。ノーダメージの合図 */
-export function sfxClang(): void {
-  tone(1250, 0.12, { type: "square", gain: 0.18, slideTo: 900 });
-  noise(0.06, { freq: 4200, gain: 0.12, q: 4 });
-}
-
-/** ダッシュ発射。ティアが上がるほど太い音 */
-export function sfxDash(tier: number): void {
-  noise(0.1 + tier * 0.06, { freq: 2400, freqTo: 420 - tier * 100, gain: 0.26 + tier * 0.1 });
-  if (tier >= 1) tone(130, 0.14, { type: "square", gain: 0.12, slideTo: 55 });
-  if (tier >= 2) noise(0.3, { filter: "lowpass", freq: 900, freqTo: 120, gain: 0.22 });
-}
-
-/** 貫通コンボ確定(3枚以上でファンファーレ的に) */
-export function sfxCombo(n: number): void {
-  const base = 523;
-  for (let i = 0; i < Math.min(n, 5); i++) {
-    tone(base * Math.pow(2, (i * 4) / 12), 0.14, { type: "triangle", gain: 0.13, delay: i * 0.04 });
-  }
-}
-
-/** 鉱石/ジェムの取得 */
-export function sfxPickup(kind: "ore" | "gem", duringDash: boolean): void {
-  if (kind === "gem") {
-    tone(1047, 0.12, { type: "triangle", gain: 0.16 });
-    tone(1568, 0.16, { type: "triangle", gain: 0.13, delay: 0.05 });
+/** 射撃。マシンガン=軽いタタン、ショットガン=太いドン */
+export function sfxShoot(shotgun: boolean): void {
+  if (shotgun) {
+    noise(0.14, { filter: "lowpass", freq: 1400, freqTo: 200, gain: 0.3 });
+    tone(110, 0.12, { type: "square", gain: 0.14, slideTo: 50 });
   } else {
-    const f = duringDash ? 1175 : 880;
-    tone(f, 0.09, { type: "triangle", gain: 0.14, slideTo: f * 1.5 });
+    noise(0.05, { freq: 2600, freqTo: 900, gain: 0.14 });
+    tone(300, 0.03, { type: "square", gain: 0.07, slideTo: 180 });
   }
 }
 
-/** ガス破裂(harmless=ダッシュ中の無害破壊) */
-export function sfxGas(harmless: boolean): void {
-  noise(harmless ? 0.1 : 0.2, { filter: "highpass", freq: 1200, gain: harmless ? 0.12 : 0.2 });
-  if (!harmless) tone(180, 0.15, { type: "sawtooth", gain: 0.14, slideTo: 70 });
+export function sfxEmpty(): void {
+  tone(700, 0.03, { type: "square", gain: 0.08 });
+  tone(500, 0.03, { type: "square", gain: 0.08, delay: 0.06 });
 }
 
-/** 被弾 */
+export function sfxTileHit(): void {
+  noise(0.03, { filter: "lowpass", freq: 800, gain: 0.1 });
+}
+
+export function sfxTileBreak(hard: boolean): void {
+  noise(0.09, { freq: hard ? 2400 : 1500, freqTo: 400, gain: 0.2 });
+  tone(hard ? 260 : 200, 0.07, { type: "square", gain: 0.12, slideTo: 90 });
+}
+
+export function sfxEnemyHit(): void {
+  tone(220, 0.05, { type: "square", gain: 0.12 });
+}
+
+/** 撃破。コンボでピッチ上昇 */
+export function sfxKill(combo: number): void {
+  const f = 330 * Math.pow(2, Math.min(combo, 20) / 12);
+  tone(f, 0.14, { type: "triangle", gain: 0.2, slideTo: f * 0.7 });
+  noise(0.06, { freq: 2400, freqTo: 800, gain: 0.14 });
+}
+
+/** 踏みつけ(バウンド+リロードの気持ちよさ) */
+export function sfxStomp(): void {
+  tone(180, 0.1, { type: "square", gain: 0.2, slideTo: 420 });
+  tone(880, 0.12, { type: "triangle", gain: 0.14, delay: 0.05 });
+}
+
+export function sfxLand(perfect: boolean): void {
+  noise(0.06, { filter: "lowpass", freq: 500, gain: 0.14 });
+  if (perfect) {
+    tone(784, 0.12, { type: "triangle", gain: 0.14, delay: 0.03 });
+    tone(1175, 0.16, { type: "triangle", gain: 0.12, delay: 0.09 });
+  }
+}
+
+export function sfxReload(): void {
+  tone(520, 0.05, { type: "square", gain: 0.1 });
+  tone(780, 0.07, { type: "square", gain: 0.1, delay: 0.06 });
+}
+
 export function sfxDamage(): void {
   tone(90, 0.28, { type: "sawtooth", gain: 0.3, slideTo: 40 });
   noise(0.22, { filter: "lowpass", freq: 1200, freqTo: 100, gain: 0.3 });
 }
 
-/** バネ圧縮のラチェット音(チャージ中に断続的に) */
-export function sfxWind(ratio: number): void {
-  tone(280 + ratio * 520, 0.02, { type: "square", gain: 0.05 });
-  noise(0.015, { freq: 4000, gain: 0.03 });
+export function sfxCp(): void {
+  tone(660, 0.12, { type: "triangle", gain: 0.15 });
+  tone(990, 0.18, { type: "triangle", gain: 0.13, delay: 0.07 });
 }
 
-/** チャージティア到達 */
-export function sfxTierUp(tier: number): void {
-  tone(tier === 2 ? 880 : 660, 0.1, { type: "triangle", gain: 0.16 });
-  tone(tier === 2 ? 1320 : 990, 0.14, { type: "triangle", gain: 0.12, delay: 0.05 });
+export function sfxGlass(): void {
+  noise(0.12, { filter: "highpass", freq: 3000, gain: 0.18 });
 }
 
-/** ステージクリア(上昇アルペジオ) */
+export function sfxTelegraph(): void {
+  tone(1100, 0.08, { gain: 0.1, slideTo: 1400 });
+}
+
+export function sfxEnemyShoot(): void {
+  tone(480, 0.09, { type: "square", gain: 0.1, slideTo: 260 });
+}
+
+export function sfxBlocked(): void {
+  tone(1500, 0.04, { type: "square", gain: 0.1 });
+}
+
+/** ジェム取得。コンボ中はピッチ上昇 */
+export function sfxGem(combo: number): void {
+  const f = 900 * Math.pow(2, Math.min(combo, 12) / 12);
+  tone(f, 0.09, { type: "triangle", gain: 0.13, slideTo: f * 1.4 });
+}
+
+export function sfxAmmoPickup(): void {
+  tone(600, 0.04, { type: "square", gain: 0.07, slideTo: 800 });
+}
+
+export function sfxComboBank(n: number): void {
+  for (let i = 0; i < Math.min(Math.floor(n / 2), 5); i++) {
+    tone(523 * Math.pow(2, (i * 4) / 12), 0.12, { type: "triangle", gain: 0.12, delay: i * 0.05 });
+  }
+}
+
+export function sfxOverdrive(): void {
+  tone(220, 0.4, { type: "sawtooth", gain: 0.14, slideTo: 880 });
+  tone(1320, 0.25, { type: "triangle", gain: 0.14, delay: 0.18 });
+}
+
 export function sfxClear(): void {
   const notes = [523, 659, 784, 1047, 1319];
   notes.forEach((f, i) => tone(f, 0.3, { type: "triangle", gain: 0.16, delay: i * 0.09 }));
 }
 
-/** ゲームオーバー(下降) */
 export function sfxFail(): void {
   const notes = [440, 349, 262, 196];
   notes.forEach((f, i) => tone(f, 0.34, { type: "triangle", gain: 0.16, delay: i * 0.12 }));
 }
 
-/** 画面遷移などのUI音 */
 export function sfxStart(): void {
   tone(660, 0.08, { type: "triangle", gain: 0.14, slideTo: 990 });
 }
 
-/** ショップ購入 */
 export function sfxBuy(): void {
   tone(784, 0.1, { type: "triangle", gain: 0.16 });
   tone(1175, 0.16, { type: "triangle", gain: 0.14, delay: 0.06 });
 }
 
-/** 購入不可 */
 export function sfxDenied(): void {
   tone(160, 0.14, { type: "square", gain: 0.1, slideTo: 120 });
 }

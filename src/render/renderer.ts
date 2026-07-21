@@ -3,13 +3,12 @@ import type { Fx } from "../fx/particles.ts";
 import type { Juice } from "../fx/juice.ts";
 import { COLORS } from "../game/config.ts";
 import type { World } from "../game/world.ts";
+import { drawBullets, drawEnemies, drawPickups, drawPlayer } from "./entities.ts";
 import { drawFx } from "./fx.ts";
 import { drawHud } from "./hud.ts";
 import { getLayout } from "./layout.ts";
-import { drawMachine } from "./machine.ts";
 import { drawTerrain } from "./terrain.ts";
 
-/** 背景(全画面クリア) */
 export function drawBackground(ctx: CanvasRenderingContext2D, vp: Viewport): void {
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, vp.w, vp.h);
@@ -29,7 +28,10 @@ export function renderPlay(
   ctx.save();
   ctx.translate(juice.offX, juice.offY);
   drawTerrain(ctx, vp, l, world);
-  drawMachine(ctx, vp, l, world);
+  drawPickups(ctx, vp, l, world);
+  drawEnemies(ctx, vp, l, world);
+  drawBullets(ctx, vp, l, world);
+  drawPlayer(ctx, vp, l, world);
   drawFx(ctx, vp, fx);
   ctx.restore();
 

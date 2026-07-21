@@ -15,6 +15,9 @@ export interface Input {
   readonly pressed: boolean;
   /** キーボード←→の方向(-1/0/+1)。タッチと併用可(開発用) */
   readonly keyDir: number;
+  /** 最後に把握しているポインタ座標(CSS px)。照準に使う */
+  readonly pointerX: number;
+  readonly pointerY: number;
   /** 前回消費から累積した横ドラッグ量(px)を取り出してリセットする */
   consumeDragDX(): number;
   setHandler(h: InputHandler): void;
@@ -28,6 +31,8 @@ export function createInput(canvas: HTMLCanvasElement): Input {
   let dragDX = 0;
   let left = false;
   let right = false;
+  let pointerX = window.innerWidth / 2;
+  let pointerY = window.innerHeight * 0.8;
 
   const down = (e: PointerEvent) => {
     e.preventDefault();
@@ -35,6 +40,8 @@ export function createInput(canvas: HTMLCanvasElement): Input {
     activeId = e.pointerId;
     pressed = true;
     lastX = e.clientX;
+    pointerX = e.clientX;
+    pointerY = e.clientY;
     handler.onDown?.(e.clientX, e.clientY);
   };
   const move = (e: PointerEvent) => {
@@ -42,6 +49,8 @@ export function createInput(canvas: HTMLCanvasElement): Input {
     e.preventDefault();
     dragDX += e.clientX - lastX;
     lastX = e.clientX;
+    pointerX = e.clientX;
+    pointerY = e.clientY;
     handler.onMove?.(e.clientX, e.clientY);
   };
   const up = (e: PointerEvent) => {
@@ -81,6 +90,12 @@ export function createInput(canvas: HTMLCanvasElement): Input {
     },
     get keyDir() {
       return (right ? 1 : 0) - (left ? 1 : 0);
+    },
+    get pointerX() {
+      return pointerX;
+    },
+    get pointerY() {
+      return pointerY;
     },
     consumeDragDX() {
       const dx = dragDX;

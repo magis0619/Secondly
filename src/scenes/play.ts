@@ -2,32 +2,22 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { resumeAudio, suspendAudio } from "../audio/audio.ts";
 import {
-  sfxClang,
-  sfxClear,
-  sfxCombo,
-  sfxDamage,
-  sfxDash,
-  sfxDig,
-  sfxFail,
-  sfxGas,
-  sfxPickup,
-  sfxSmash,
-  sfxTierUp,
-  sfxWind,
+  sfxAmmoPickup, sfxBlocked, sfxClear, sfxComboBank, sfxCp, sfxDamage, sfxEmpty,
+  sfxEnemyHit, sfxEnemyShoot, sfxFail, sfxGem, sfxGlass, sfxKill, sfxLand, sfxOverdrive,
+  sfxReload, sfxShoot, sfxStomp, sfxTelegraph, sfxTileBreak, sfxTileHit,
 } from "../audio/sfx.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
-import { COLORS, GRID, MACHINE, modsFromUpgrades } from "../game/config.ts";
+import { COLORS, modsFrom } from "../game/config.ts";
 import { loadSave, persistStageResult } from "../game/save.ts";
 import type { StageDef } from "../game/stages.ts";
 import { STAGES } from "../game/stages.ts";
 import { World, type WorldEvent } from "../game/world.ts";
-import { formatScore } from "../render/hud.ts";
-import { getLayout, colX, depthY } from "../render/layout.ts";
+import { colX, depthY, getLayout } from "../render/layout.ts";
 import { renderPlay } from "../render/renderer.ts";
 import { ResultScene } from "./result.ts";
 
-const END_DELAY = 1.3; // 終了演出を見せてからリザルトへ
+const END_DELAY = 1.3;
 
 export class PlayScene implements Scene {
   private world: World;
@@ -36,8 +26,8 @@ export class PlayScene implements Scene {
   private paused = false;
   private endT = 0;
   private finished = false;
-  private windT = 0;
-  private smashIdx = 0;
+  private shotSfxT = 0;
+  private isShotgun: boolean;
   private onVisibility = () => {
     if (document.hidden && this.world.status === "playing") {
       this.paused = true;
@@ -49,33 +39,40 @@ export class PlayScene implements Scene {
     private app: App,
     private stage: StageDef,
   ) {
-    this.world = new World(stage, modsFromUpgrades(loadSave().upgrades));
+    const save = loadSave();
+    this.isShotgun = save.selectedWeapon === "shotgun";
+    this.world = new World(stage, modsFrom(save.upgrades, save.selectedWeapon));
   }
 
   enter(): void {
     document.addEventListener("visibilitychange", this.onVisibility);
     if (import.meta.env.DEV) {
-      // Playwright/開発コンソールからの検証用フック
-      (window as unknown as Record<string, unknown>).__drill = {
+      (window as unknown as Record<string, unknown>).__recoil = {
         world: this.world,
         state: () => ({
           scene: "play",
           stage: this.stage.id,
-          depth: this.world.machine.depth,
-          col: this.world.machine.col,
-          hp: this.world.machine.hp,
-          machineState: this.world.machine.state,
+          x: this.world.player.x,
+          y: this.world.player.y,
+          vy: this.world.player.vy,
+          hp: this.world.player.hp,
+          ammo: this.world.player.ammo,
+          gems: this.world.gems,
+          combo: this.world.combo,
           score: this.world.score,
-          coins: this.world.coins,
           status: this.world.status,
+          grounded: this.world.player.grounded,
         }),
-        warp: (depth: number) => {
-          this.world.machine.depth = depth;
-          this.world.camera.depth = depth;
+        warp: (y: number) => {
+          this.world.player.y = y;
+          this.world.player.vy = 0;
+          this.world.camera.y = y;
         },
-        moveTo: (col: number) => {
-          this.world.machine.col = col + 0.5 > GRID.COLS ? GRID.COLS - 0.5 : col;
-          this.world.machine.targetCol = this.world.machine.col;
+        setAmmo: (n: number) => {
+          this.world.player.ammo = n;
+        },
+        setHp: (n: number) => {
+          this.world.player.hp = n;
         },
       };
     }
@@ -91,27 +88,18 @@ export class PlayScene implements Scene {
     const { vp, input } = this.app;
     this.juice.update(dt, 8 * vp.unit);
     const sdt = dt * this.juice.timeScale;
+    this.shotSfxT = Math.max(this.shotSfxT - dt, 0);
 
-    const tilePx = GRID.TILE_UNITS * vp.unit;
+    const l = getLayout(vp);
+    this.world.visibleRows = vp.h / l.tile;
     const ctrl = {
-      pressed: input.pressed,
-      dragCols: (input.consumeDragDX() / tilePx) * MACHINE.DRAG_SENS,
-      keyDir: input.keyDir,
+      firing: input.pressed,
+      aimX: (input.pointerX - l.originX) / l.tile,
+      aimY: this.world.camera.y + (input.pointerY - l.anchorY) / l.tile,
     };
 
     this.world.update(sdt, ctrl);
     this.fx.update(sdt);
-
-    // バネ圧縮のラチェット音
-    if (this.world.machine.state === "charging") {
-      this.windT -= sdt;
-      if (this.windT <= 0) {
-        this.windT = 0.09;
-        sfxWind(this.world.machine.chargeRatio);
-      }
-    } else {
-      this.windT = 0;
-    }
 
     for (const ev of this.world.drainEvents()) this.handleEvent(ev);
 
@@ -120,12 +108,15 @@ export class PlayScene implements Scene {
       if (this.endT >= END_DELAY && !this.finished) {
         this.finished = true;
         const cleared = this.world.status === "clear";
+        const stars: [boolean, boolean, boolean] = cleared
+          ? [true, this.world.damageTaken === 0, this.world.gemsTotal > 0 && this.world.gems >= Math.floor(this.world.gemsTotal * 0.8)]
+          : [false, false, false];
         const outcome = persistStageResult(
           this.stage.id,
           this.world.score,
           Math.round(this.world.elapsed * 1000),
-          this.world.coins,
-          cleared,
+          this.world.gems,
+          stars,
           STAGES.length,
         );
         this.app.manager.switchTo(
@@ -134,111 +125,159 @@ export class PlayScene implements Scene {
             score: this.world.score,
             timeMs: Math.round(this.world.elapsed * 1000),
             cleared,
-            coinsAdded: outcome.coinsAdded,
+            stars,
+            gems: this.world.gems,
             newBest: outcome.newBest,
-            totalCoins: outcome.save.coins,
+            totalGems: outcome.save.gems,
           }),
         );
       }
     }
   }
 
-  /** タイル座標→画面座標(このフレームのカメラ基準) */
-  private px(col: number, row: number): [number, number] {
+  /** タイル座標→画面座標 */
+  private px(tx: number, ty: number): [number, number] {
     const l = getLayout(this.app.vp);
-    return [colX(l, col + 0.5), depthY(l, this.world.camera.depth, row + 0.5)];
+    return [colX(l, tx), depthY(l, this.world.camera.y, ty)];
   }
 
   private handleEvent(ev: WorldEvent): void {
     const { vp } = this.app;
     const u = vp.unit;
     switch (ev.type) {
-      case "dig": {
-        const [x, y] = this.px(ev.col, ev.row);
-        sfxDig();
-        this.fx.burst(x, y, "#8a6a48", 4, 90 * u, 3 * u);
+      case "shoot":
+        if (this.shotSfxT <= 0) {
+          this.shotSfxT = this.isShotgun ? 0 : 0.045; // MGは音を間引く
+          sfxShoot(this.isShotgun);
+        }
+        if (this.isShotgun) this.juice.shake(0.12);
+        break;
+      case "empty":
+        sfxEmpty();
+        break;
+      case "tileHit": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxTileHit();
+        this.fx.burst(x, y, "#c9cfe0", 3, 80 * u, 2.5 * u);
         break;
       }
-      case "smash": {
-        const [x, y] = this.px(ev.col, ev.row);
-        const color = ev.kind === "steel" ? COLORS.tile.steel : COLORS.tile.rock;
-        sfxSmash(this.smashIdx++, ev.kind === "steel");
-        this.fx.burst(x, y, color, 10, 170 * u, 4 * u);
-        this.fx.ring(x, y, "#ffffff", 20 * u, 2.5 * u, 0.25);
-        this.juice.hitstop(0.015);
-        this.juice.shake(0.08);
+      case "tileBreak": {
+        const [x, y] = this.px(ev.x, ev.y);
+        const color =
+          ev.kind === "ore" ? COLORS.tile.ore : ev.kind === "hard" ? COLORS.tile.hard : ev.kind === "glass" ? COLORS.tile.glass : COLORS.tile.rock;
+        sfxTileBreak(ev.kind === "hard");
+        this.fx.burst(x, y, color, 9, 150 * u, 3.5 * u);
+        this.juice.hitstop(0.012);
         break;
       }
-      case "clang": {
-        const [x, y] = this.px(ev.col, ev.row);
-        sfxClang();
-        this.fx.burst(x, y - 14 * u, "#ffe9a8", 6, 140 * u, 3 * u);
-        this.fx.float(x, y - 26 * u, "かたい!", COLORS.textDim, 13 * u, 0.7);
-        this.juice.shake(0.22);
+      case "enemyHit": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxEnemyHit();
+        this.fx.burst(x, y, "#ffffff", 4, 110 * u, 3 * u);
         break;
       }
-      case "dashStart":
-        sfxDash(ev.tier);
-        this.smashIdx = 0;
-        if (ev.tier === 2) this.juice.shake(0.18);
+      case "kill": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxKill(this.world.combo);
+        this.fx.burst(x, y, COLORS.enemy[ev.kind], 12, 170 * u, 4 * u);
+        this.fx.ring(x, y, "#ffffff", 22 * u, 2.5 * u, 0.25);
+        this.juice.hitstop(0.04);
+        this.juice.shake(0.15);
         break;
-      case "dashEnd": {
-        if (ev.smashed >= 2) {
-          const m = this.world.machine;
-          const [x, y] = this.px(m.col - 0.5, Math.max(m.depth - 1.6, 0));
-          this.fx.float(x, y, `+${formatScore(ev.score)}`, COLORS.text, 16 * u, 0.9);
-          if (ev.smashed >= 3) {
-            sfxCombo(ev.smashed);
-            this.fx.float(x, y + 22 * u, `${ev.smashed}枚 ぶちぬき!`, COLORS.tier[2], 14 * u, 0.9);
-            this.juice.shake(Math.min(0.1 * ev.smashed, 0.5));
-          }
+      }
+      case "stomp": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxStomp();
+        this.fx.ring(x, y, COLORS.aim, 30 * u, 3 * u, 0.3);
+        this.juice.hitstop(0.06);
+        this.juice.shake(0.2);
+        this.fx.float(x, y - 20 * u, "リロード!", COLORS.aim, 12 * u, 0.7);
+        break;
+      }
+      case "land":
+        sfxLand(ev.perfect);
+        if (ev.perfect && this.world.status === "playing") {
+          const [x, y] = this.px(this.world.player.x, this.world.player.y - 1);
+          this.fx.float(x, y, "ソフトランディング", "#7dff8a", 11 * u, 0.7);
         }
         break;
-      }
-      case "pickup": {
-        const [x, y] = this.px(ev.col, ev.row);
-        const color = ev.kind === "gem" ? COLORS.tile.gem : COLORS.coin;
-        sfxPickup(ev.kind, ev.duringDash);
-        this.fx.burst(x, y, color, ev.kind === "gem" ? 12 : 7, 150 * u, 3.5 * u);
-        this.fx.float(x, y - 16 * u, `+${ev.score}`, color, 13 * u, 0.8);
+      case "reload":
+        sfxReload();
         break;
-      }
-      case "gasBurst": {
-        const [x, y] = this.px(ev.col, ev.row);
-        sfxGas(ev.harmless);
-        this.fx.burst(x, y, COLORS.tile.gas, 10, 160 * u, 3.5 * u);
-        this.fx.ring(x, y, COLORS.tile.gas, 26 * u, 2.5 * u, 0.3);
-        break;
-      }
-      case "tierUp": {
-        const m = this.world.machine;
-        const [x, y] = this.px(m.col - 0.5, m.depth);
-        sfxTierUp(ev.tier);
-        this.fx.ring(x, y, COLORS.tier[ev.tier], 30 * u, 2.5 * u, 0.3);
-        break;
-      }
       case "damage": {
-        const [x, y] = this.px(ev.col, ev.row);
+        const [x, y] = this.px(ev.x, ev.y);
         sfxDamage();
         this.juice.hitstop(0.12);
         this.juice.shake(0.6);
         this.juice.flashScreen(COLORS.danger, 0.3);
-        this.fx.float(x, y - 20 * u, "-1", COLORS.danger, 18 * u, 0.8);
+        this.fx.float(x, y - 20 * u, ev.cause === "crash" ? "激突!" : "-1", COLORS.danger, 15 * u, 0.8);
+        break;
+      }
+      case "cp": {
+        sfxCp();
+        const [x, y] = this.px(this.world.terrain.cols / 2, ev.row);
+        this.fx.ring(x, y, "#7dff8a", 60 * u, 3 * u, 0.5);
+        this.fx.float(x, y - 16 * u, "チェックポイント / 弾補給", "#7dff8a", 11 * u, 1);
+        break;
+      }
+      case "glassBreak": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxGlass();
+        this.fx.burst(x, y, COLORS.tile.glass, 8, 120 * u, 3 * u);
+        break;
+      }
+      case "telegraph":
+        sfxTelegraph();
+        break;
+      case "enemyShoot":
+        sfxEnemyShoot();
+        break;
+      case "bulletBlocked": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxBlocked();
+        this.fx.burst(x, y, COLORS.ammo, 5, 100 * u, 2.5 * u);
+        break;
+      }
+      case "gem": {
+        const [x, y] = this.px(ev.x, ev.y);
+        sfxGem(this.world.combo);
+        this.fx.float(x, y - 10 * u, `+${ev.n}`, COLORS.gem, 11 * u, 0.5);
+        break;
+      }
+      case "ammoPickup":
+        sfxAmmoPickup();
+        break;
+      case "comboAdd":
+        if (ev.n === 8) {
+          const [x, y] = this.px(this.world.player.x, this.world.player.y - 1.5);
+          this.fx.float(x, y, "すごい!", COLORS.overdrive, 15 * u, 0.8);
+        }
+        break;
+      case "comboBank": {
+        const [x, y] = this.px(this.world.player.x, this.world.player.y - 1.2);
+        sfxComboBank(ev.n);
+        this.fx.float(x, y, `コンボ×${ev.n} → +${ev.gems}ジェム`, COLORS.gem, 13 * u, 1);
+        break;
+      }
+      case "overdrive": {
+        sfxOverdrive();
+        this.juice.flashScreen(COLORS.overdrive, 0.18);
+        const [x, y] = this.px(this.world.player.x, this.world.player.y - 1.5);
+        this.fx.float(x, y, "OVERDRIVE!", COLORS.overdrive, 17 * u, 1);
         break;
       }
       case "clear": {
-        const [x, y] = this.px(3, Math.max(this.world.machine.depth - 2, 0));
         sfxClear();
-        this.juice.flashScreen(COLORS.coin, 0.25);
-        this.juice.shake(0.4);
-        this.fx.float(x, y, "コアに とうたつ!", COLORS.coin, 20 * u, 1.3);
+        this.juice.flashScreen("#7dff8a", 0.25);
+        const [x, y] = this.px(this.world.terrain.cols / 2, this.world.player.y - 2);
+        this.fx.float(x, y, "とうちゃく!", "#7dff8a", 20 * u, 1.3);
         break;
       }
       case "failed": {
-        const [x, y] = this.px(3, Math.max(this.world.machine.depth - 2, 0));
         sfxFail();
         this.juice.shake(0.8);
-        this.fx.float(x, y, "きたい たいは……", COLORS.danger, 20 * u, 1.3);
+        const [x, y] = this.px(this.world.player.x, this.world.player.y - 2);
+        this.fx.float(x, y, "きたい たいは……", COLORS.danger, 18 * u, 1.3);
         break;
       }
     }
@@ -246,7 +285,6 @@ export class PlayScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     renderPlay(ctx, this.app.vp, this.world, this.fx, this.juice);
-
     if (this.paused) {
       const { w, h, unit } = this.app.vp;
       ctx.save();

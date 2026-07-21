@@ -1,10 +1,6 @@
 /**
- * ★全チューニング定数の一元管理。バランス調整はこのファイルだけを触る。
- * 座標はタイル単位(col=横列0..6中心値, depth=行の連続値)。速度は 行/秒・列/秒。
- *
- * 【公平性の不変条件】DASHの最大距離(TIERS[2].rows=11) < 画面の先読み行数(約12行)。
- * これを破ると「見えない場所へ突っ込む理不尽」が生まれるので、rows か
- * カメラアンカー(CAMERA.ANCHOR_RATIO)を変えるときは必ず両方を確認すること。
+ * ★全チューニング定数の一元管理(RECOIL DIVER)。バランス調整はこのファイルだけを触る。
+ * 座標系: タイル単位。x=列(0..COLS-1)、y=行(下が正)。1行=深度1m。速度は タイル/秒。
  */
 
 export const COLORS = {
@@ -14,153 +10,194 @@ export const COLORS = {
   text: "#eaf6ff",
   textDim: "#7f8db4",
   danger: "#ff3b5c",
-  coin: "#ffd166",
-  machine: "#eaf6ff",
-  drill: "#3ec6ff",
+  warn: "#ffb03c",
+  gem: "#ffd166",
+  ammo: "#ffde7a",
+  player: "#eaf6ff",
+  aim: "#38e1ff",
   tier: ["#eaf6ff", "#38e1ff", "#ff4fa3"],
-  wall: "#111a30",
+  wall: "#1c2743",
+  wallEdge: "#2c3a63",
   tile: {
-    rock: "#6b7694",
-    rockDark: "#4a5470",
-    steel: "#aebcd8",
-    steelDark: "#7d8cb0",
+    rock: "#6d5138",
+    rockDark: "#523b28",
+    hard: "#6b7694",
+    hardDark: "#4a5470",
     ore: "#ffd166",
-    gem: "#b48cff",
+    glass: "#8fd8ff",
+    spike: "#ff3b5c",
     lava: "#ff5a3c",
     lavaGlow: "#ffb03c",
-    gas: "#7dff8a",
-    core: "#ffd166",
+    pad: "#7dff8a",
   },
+  enemy: {
+    fuwari: "#e8f4ff", // 白=踏める
+    hane: "#d8e8ff",
+    togemaru: "#ff4fa3", // 赤=踏めない
+    houdai: "#ff6a5c",
+  } as Record<string, string>,
+  overdrive: "#ff4fa3",
 } as const;
 
 export const GRID = {
-  COLS: 7,
-  /** タイル1辺 = TILE_UNITS * vp.unit (unit=短辺/400 → 7列で350unit+左右の岩壁帯) */
-  TILE_UNITS: 46,
+  COLS: 13,
+  /** タイル1辺 = TILE_UNITS * vp.unit(unit=短辺/400 → 13列で390units) */
+  TILE_UNITS: 30,
 } as const;
 
 export const CAMERA = {
-  /** 機体を画面上からこの割合の位置に置く(下に約12行の先読みを確保) */
-  ANCHOR_RATIO: 0.3,
-  FOLLOW: 8, // damp係数
-  FOLLOW_DASH: 16,
+  ANCHOR_RATIO: 0.34, // プレイヤーを画面上からこの割合に
+  FOLLOW_DOWN: 10,
+  FOLLOW_UP: 5,
 } as const;
 
-export const MACHINE = {
-  HP: 3,
-  INVULN: 1.0,
-  /** 自動掘削の降下速度(行/s)。土・鉱石などのソフト地形のみ */
-  DRILL_SPEED: 1.6,
-  /** 空洞での落下速度(行/s) */
-  FALL_SPEED: 7,
-  /** 横移動: 空洞・掘削済み空間での追従damp係数 */
-  SIDE_FOLLOW: 14,
-  /** 横移動: 土を削りながら進む速度(列/s) */
-  SIDE_DIG_SPEED: 1.7,
-  /** ドラッグ感度(画面上でタイル1枚ぶん動かすと機体が何列動くか) */
-  DRAG_SENS: 1.35,
-  /** キーボード←→の移動速度(列/s) */
-  KEY_SPEED: 5,
-  /** 機体の当たり半径(タイル比) */
-  HITBOX: 0.34,
-  /** 被弾時に押し戻される行数 */
-  KNOCKBACK_ROWS: 0.7,
-  /** これ未満のチャージで離してもダッシュしない(操縦ドラッグの誤爆防止) */
-  CHARGE_T1: 0.22,
-  CHARGE_T2: 0.45,
-  CHARGE_T3: 0.95,
-  /** このフレーム移動量(列)を超えるドラッグを「操縦中」とみなす */
-  CHARGE_MOVE_EPS: 0.015,
-  /** 最後のドラッグからこの秒数はチャージが増えない(タッチイベントの粒度対策) */
-  CHARGE_MOVE_LOCK: 0.18,
-  /** ダッシュ3ティア: 最大行数 / 速度(行/s) / 破壊可能硬度(1=岩, 2=鉄骨) */
-  TIERS: [
-    { rows: 4, speed: 14, power: 1, label: "Lv1" },
-    { rows: 7, speed: 16, power: 2, label: "Lv2" },
-    { rows: 11, speed: 18, power: 2, label: "MAX" },
-  ],
-  HURT_TIME: 0.35,
+export const PHYS = {
+  GRAVITY: 26, // タイル/s²
+  TERMINAL: 15, // 最大落下速度
+  AIR_DRAG: 1.4, // 横速度の減衰(/s)
+  PLAYER_R: 0.36, // プレイヤー半サイズ(AABB半幅、タイル)
+  /** この落下速度以下で接地=無傷。超過は激突ダメージ */
+  SAFE_LAND: 9.5,
+  STOMP_BOUNCE: -9.5, // 踏みつけ後の跳ね上がり
+  KNOCKBACK: 7,
 } as const;
+
+export const PLAYER = {
+  HP: 3,
+  INVULN: 1.2,
+  AMMO_START: 30,
+  CP_AMMO: 15, // チェックポイント通過時にこの値まで無条件回復
+  MAGNET_R: 2.4, // 破片吸引半径(タイル)
+} as const;
+
+export type WeaponId = "machinegun" | "shotgun";
+
+export interface WeaponDef {
+  name: string;
+  rate: number; // 発/s
+  impulse: number; // 1発の反動(タイル/s)
+  cost: number; // 弾消費
+  dmg: number;
+  speed: number; // 弾速
+  range: number; // 射程(タイル)
+  spreadDeg: number;
+  pellets: number;
+}
+
+export const WEAPONS: Record<WeaponId, WeaponDef> = {
+  // MGの持続推力 = rate×impulse ≈ 30 > 重力26 → 下撃ちホバーでゆっくり上昇できる程度
+  machinegun: { name: "マシンガン", rate: 9, impulse: 3.35, cost: 1, dmg: 1, speed: 42, range: 12, spreadDeg: 4, pellets: 1 },
+  shotgun: { name: "ショットガン", rate: 2.4, impulse: 11, cost: 3, dmg: 1, speed: 38, range: 6.5, spreadDeg: 24, pellets: 5 },
+};
 
 export type TileKind =
   | "empty"
-  | "dirt"
-  | "rock"
-  | "steel"
-  | "ore"
-  | "gem"
-  | "lava"
-  | "gas"
-  | "core";
+  | "wall" // 破壊不可
+  | "rock" // 1発。弾ドロップ
+  | "hard" // 3発。弾ドロップ多め
+  | "ore" // 1発。ジェム+弾
+  | "glass" // 乗ると割れる足場(射撃でも割れる)
+  | "spike" // 静的ハザード(すり抜けるがダメージ)
+  | "lava" // 静的ハザード
+  | "pad"; // ゴール
 
-/** タイル特性。hardness: 0=ソフト(自動掘削可) 1=岩 2=鉄骨 99=破壊不可 */
-export const TILE_DEFS: Record<TileKind, { hardness: number; hazard: boolean }> = {
-  empty: { hardness: 0, hazard: false },
-  dirt: { hardness: 0, hazard: false },
-  ore: { hardness: 0, hazard: false },
-  gem: { hardness: 0, hazard: false },
-  gas: { hardness: 0, hazard: true }, // 触れるとダメージ、ダッシュ中は無害に破壊
-  rock: { hardness: 1, hazard: false },
-  steel: { hardness: 2, hazard: false },
-  lava: { hardness: 99, hazard: true }, // 破壊不可。重なるとダメージ
-  core: { hardness: 0, hazard: false }, // 接触=ステージクリア
+export const TILE_HP: Partial<Record<TileKind, number>> = {
+  rock: 1,
+  hard: 3,
+  ore: 1,
+  glass: 1,
 };
 
+export const GLASS_BREAK_DELAY = 0.45; // 乗ってから割れるまで
+
+/** タイル破壊時のドロップ(破片個数) */
+export const TILE_DROPS: Partial<Record<TileKind, { ammoShards: number; gems: number }>> = {
+  rock: { ammoShards: 2, gems: 0 }, // 1個+2発 → 岩1つで+4発(採掘1発消費→純益+3)
+  hard: { ammoShards: 4, gems: 1 },
+  ore: { ammoShards: 2, gems: 2 },
+  glass: { ammoShards: 0, gems: 0 },
+};
+
+export const PICKUP = {
+  AMMO_PER_SHARD: 2,
+  GRAVITY_K: 0.55, // 破片にかかる重力の係数
+  BOUNCE: 0.45,
+  LIFE: 9,
+  MAGNET_ACCEL: 60,
+  COLLECT_R: 0.5,
+} as const;
+
+export type EnemyKind = "fuwari" | "togemaru" | "houdai";
+
+export interface EnemyDef {
+  hp: number;
+  r: number;
+  stompable: boolean; // 白=true / 赤=false
+  gems: number;
+  ammoShards: number;
+  score: number;
+}
+
+export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
+  fuwari: { hp: 1, r: 0.42, stompable: true, gems: 1, ammoShards: 1, score: 100 },
+  togemaru: { hp: 2, r: 0.44, stompable: false, gems: 2, ammoShards: 2, score: 150 },
+  houdai: { hp: 3, r: 0.5, stompable: false, gems: 4, ammoShards: 3, score: 300 },
+};
+
+export const ENEMY_AI = {
+  FUWARI_AMP: 0.9, // 上下浮遊の振幅(タイル)
+  FUWARI_SPEED: 1.4,
+  TOGE_SPEED: 1.7, // 左右パトロール速度
+  HOUDAI_IDLE: 1.4,
+  HOUDAI_AIM: 0.8, // レーザーサイト予告時間
+  HOUDAI_SHOT_SPEED: 6,
+  HOUDAI_RANGE: 11, // この距離(タイル)以内かつ画面内でのみ起動
+  ENEMY_BULLET_R: 0.18,
+} as const;
+
+export const COMBO = {
+  /** 接地せず破壊・撃破を続けると+1。接地で確定しジェムボーナス化 */
+  BANK_GEM_PER: 0.5, // 確定時: combo × これ(端数切捨)をジェム加算
+  OVERDRIVE_AT: 10,
+  OVERDRIVE_TIME: 4, // 弾消費ゼロの秒数
+  PRAISE_AT: 8,
+} as const;
+
 export const SCORE = {
-  /** 貫通コンボ: 1ダッシュで壊したタイル数nに対し SMASH_BASE * n * n */
-  SMASH_BASE: 30,
-  ORE: 50,
-  GEM: 250,
-  ORE_COINS: 1,
-  GEM_COINS: 5,
-  /** ダッシュ中の鉱石取得は倍 */
-  DASH_PICKUP_MULT: 2,
-  TIME_BONUS_PER_SEC: 100,
+  TILE: 20,
+  LANDING_PERFECT: 1000, // 接地速度3以下
+  LANDING_GOOD: 400, // SAFE_LAND以下
   HP_BONUS: 500,
-  /** 失敗時のコイン持ち帰り率 */
-  FAIL_COIN_RATE: 0.5,
+  TIME_BONUS_PER_SEC: 100,
+  GEM_SCORE: 30,
 } as const;
 
 export interface UpgradeDef {
-  key: "chargeSpeed" | "armor";
+  key: "magazine" | "armor";
   name: string;
   desc: string;
   max: number;
-  costs: number[]; // レベルごとの価格
+  costs: number[];
 }
 
 export const UPGRADE_DEFS: UpgradeDef[] = [
-  {
-    key: "chargeSpeed",
-    name: "ハイスピードバネ",
-    desc: "チャージ時間 -12% / Lv",
-    max: 2,
-    costs: [30, 90],
-  },
-  {
-    key: "armor",
-    name: "アーマープレート",
-    desc: "HP +1 / Lv",
-    max: 2,
-    costs: [50, 140],
-  },
+  { key: "magazine", name: "拡張弾倉", desc: "弾の上限 +10 / Lv", max: 2, costs: [40, 100] },
+  { key: "armor", name: "アーマープレート", desc: "HP +1 / Lv", max: 2, costs: [60, 150] },
 ];
 
-/** chargeSpeed Lv1つきのチャージ閾値短縮率 */
-export const CHARGE_SPEED_PER_LV = 0.12;
+export const SHOTGUN_COST = 120;
 
 /** セーブから導出してWorldへ渡す実効値(Worldはストレージを直接読まない) */
 export interface RunMods {
-  chargeT2: number;
-  chargeT3: number;
   maxHp: number;
+  maxAmmo: number;
+  weapon: WeaponId;
 }
 
-export function modsFromUpgrades(up: { chargeSpeed: number; armor: number }): RunMods {
-  const k = 1 - CHARGE_SPEED_PER_LV * up.chargeSpeed;
+export function modsFrom(up: { magazine: number; armor: number }, weapon: WeaponId): RunMods {
   return {
-    chargeT2: MACHINE.CHARGE_T2 * k,
-    chargeT3: MACHINE.CHARGE_T3 * k,
-    maxHp: MACHINE.HP + up.armor,
+    maxHp: PLAYER.HP + up.armor,
+    maxAmmo: PLAYER.AMMO_START + up.magazine * 10,
+    weapon,
   };
 }

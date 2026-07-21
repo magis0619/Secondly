@@ -1,22 +1,23 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxBuy, sfxDenied, sfxStart } from "../audio/sfx.ts";
-import { COLORS, UPGRADE_DEFS } from "../game/config.ts";
+import { COLORS, SHOTGUN_COST, UPGRADE_DEFS, WEAPONS } from "../game/config.ts";
 import type { SaveData } from "../game/save.ts";
-import { buyUpgrade, loadSave } from "../game/save.ts";
-import { drawCoinIcon } from "../render/hud.ts";
+import { buyShotgun, buyUpgrade, loadSave, selectWeapon } from "../game/save.ts";
+import { drawGemIcon } from "../render/hud.ts";
 import { drawBackground } from "../render/renderer.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
 import { StageSelectScene } from "./stageselect.ts";
 
-/** ステージ間の簡易アップグレードショップ(メタ進行の雛形) */
+/** アップグレード2種+ショットガン解放+武器切替(メタ進行の雛形) */
 export class ShopScene implements Scene {
   private t = 0;
   private save: SaveData = loadSave();
-  private buyRects: { rect: Rect; key: "chargeSpeed" | "armor" }[] = [];
+  private buyRects: { rect: Rect; key: "magazine" | "armor" }[] = [];
+  private shotgunRect: Rect | null = null;
+  private weaponRects: { rect: Rect; weapon: "machinegun" | "shotgun" }[] = [];
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
-  /** 購入直後のフラッシュ演出用 */
   private boughtFlash = 0;
 
   constructor(private app: App) {}
@@ -32,79 +33,117 @@ export class ShopScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     const { vp } = this.app;
-    const { w, h, unit, safeTop, safeBottom } = vp;
+    const { w, h, unit: u, safeTop, safeBottom } = vp;
     drawBackground(ctx, vp);
 
     ctx.save();
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.fillStyle = COLORS.text;
-    ctx.font = `900 ${24 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("🔧 アップグレード", w / 2, safeTop + 34 * unit);
-
-    // コイン残高
-    drawCoinIcon(ctx, w / 2 - 30 * unit, safeTop + 68 * unit, 9 * unit);
-    ctx.fillStyle = COLORS.coin;
+    ctx.font = `900 ${24 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("🔧 アップグレード", w / 2, safeTop + 32 * u);
+    drawGemIcon(ctx, w / 2 - 26 * u, safeTop + 62 * u, 8 * u);
+    ctx.fillStyle = COLORS.gem;
     ctx.textAlign = "left";
-    ctx.font = `800 ${17 * unit}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(String(this.save.coins), w / 2 - 16 * unit, safeTop + 68 * unit);
+    ctx.font = `800 ${16 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText(String(this.save.gems), w / 2 - 13 * u, safeTop + 62 * u);
 
-    // カード
+    const cardW = 310 * u;
+    const cardH = 86 * u;
+    let cy = safeTop + 92 * u;
     this.buyRects = [];
-    const cardW = 300 * unit;
-    const cardH = 108 * unit;
-    UPGRADE_DEFS.forEach((def, i) => {
+
+    // 恒久強化カード
+    for (const def of UPGRADE_DEFS) {
       const cx = w / 2 - cardW / 2;
-      const cy = safeTop + 100 * unit + i * (cardH + 18 * unit);
       const lv = this.save.upgrades[def.key];
       const maxed = lv >= def.max;
       const cost = maxed ? 0 : def.costs[lv];
-      const affordable = !maxed && this.save.coins >= cost;
+      const affordable = !maxed && this.save.gems >= cost;
 
       ctx.fillStyle = "#1c2743";
       ctx.beginPath();
-      ctx.roundRect(cx, cy, cardW, cardH, 14 * unit);
+      ctx.roundRect(cx, cy, cardW, cardH, 12 * u);
       ctx.fill();
-
       ctx.textAlign = "left";
       ctx.fillStyle = COLORS.text;
-      ctx.font = `800 ${16 * unit}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(def.name, cx + 18 * unit, cy + 24 * unit);
+      ctx.font = `800 ${15 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(def.name, cx + 16 * u, cy + 22 * u);
       ctx.fillStyle = COLORS.textDim;
-      ctx.font = `700 ${11 * unit}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(def.desc, cx + 18 * unit, cy + 46 * unit);
-
-      // レベルピップ
-      for (let p = 0; p < def.max; p++) {
-        const px = cx + 18 * unit + p * 24 * unit;
-        const py = cy + 72 * unit;
-        ctx.fillStyle = p < lv ? COLORS.drill : "#2a3352";
+      ctx.font = `700 ${10.5 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(def.desc, cx + 16 * u, cy + 42 * u);
+      for (let pIdx = 0; pIdx < def.max; pIdx++) {
+        ctx.fillStyle = pIdx < lv ? COLORS.aim : "#2a3352";
         ctx.beginPath();
-        ctx.roundRect(px, py, 18 * unit, 8 * unit, 4 * unit);
+        ctx.roundRect(cx + 16 * u + pIdx * 24 * u, cy + 58 * u, 18 * u, 7 * u, 3.5 * u);
         ctx.fill();
       }
-
-      // 購入ボタン
-      const bRect: Rect = { x: cx + cardW - 108 * unit, y: cy + cardH / 2 - 22 * unit, w: 92 * unit, h: 44 * unit };
+      const bRect: Rect = { x: cx + cardW - 100 * u, y: cy + cardH / 2 - 20 * u, w: 86 * u, h: 40 * u };
       this.buyRects.push({ rect: bRect, key: def.key });
-      drawButton(ctx, unit, bRect, maxed ? "MAX" : `◆${cost}`, {
-        bg: maxed ? "#2a3352" : affordable ? COLORS.tier[2] : "#2a3352",
+      drawButton(ctx, u, bRect, maxed ? "MAX" : `◆${cost}`, {
+        bg: maxed || !affordable ? "#2a3352" : COLORS.tier[2],
         fg: maxed || !affordable ? COLORS.textDim : COLORS.bg,
         disabled: maxed,
-        fontPx: 14 * unit,
+        fontPx: 13 * u,
       });
-    });
+      cy += cardH + 14 * u;
+    }
+
+    // ショットガン(解放 or 武器切替)
+    const cx = w / 2 - cardW / 2;
+    ctx.fillStyle = "#1c2743";
+    ctx.beginPath();
+    ctx.roundRect(cx, cy, cardW, cardH, 12 * u);
+    ctx.fill();
+    ctx.textAlign = "left";
+    ctx.fillStyle = COLORS.text;
+    ctx.font = `800 ${15 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("ショットガン", cx + 16 * u, cy + 22 * u);
+    ctx.fillStyle = COLORS.textDim;
+    ctx.font = `700 ${10.5 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText("大反動で大きく跳ぶ+まとめて砕く", cx + 16 * u, cy + 42 * u);
+
+    this.shotgunRect = null;
+    this.weaponRects = [];
+    if (!this.save.shotgunOwned) {
+      const bRect: Rect = { x: cx + cardW - 100 * u, y: cy + cardH / 2 - 20 * u, w: 86 * u, h: 40 * u };
+      this.shotgunRect = bRect;
+      const affordable = this.save.gems >= SHOTGUN_COST;
+      drawButton(ctx, u, bRect, `◆${SHOTGUN_COST}`, {
+        bg: affordable ? COLORS.tier[2] : "#2a3352",
+        fg: affordable ? COLORS.bg : COLORS.textDim,
+        fontPx: 13 * u,
+      });
+    } else {
+      // 武器切替トグル
+      const opts: ("machinegun" | "shotgun")[] = ["machinegun", "shotgun"];
+      opts.forEach((wid, i) => {
+        const bRect: Rect = {
+          x: cx + cardW - 196 * u + i * 100 * u,
+          y: cy + cardH / 2 - 18 * u,
+          w: 92 * u,
+          h: 36 * u,
+        };
+        this.weaponRects.push({ rect: bRect, weapon: wid });
+        const selected = this.save.selectedWeapon === wid;
+        drawButton(ctx, u, bRect, WEAPONS[wid].name, {
+          bg: selected ? COLORS.aim : "#2a3352",
+          fg: selected ? COLORS.bg : COLORS.textDim,
+          fontPx: 11 * u,
+        });
+      });
+    }
+    cy += cardH + 14 * u;
 
     if (this.boughtFlash > 0) {
       ctx.globalAlpha = this.boughtFlash * 0.25;
-      ctx.fillStyle = COLORS.coin;
+      ctx.fillStyle = COLORS.gem;
       ctx.fillRect(0, 0, w, h);
       ctx.globalAlpha = 1;
     }
 
-    // もどる
-    this.backRect = { x: w / 2 - 100 * unit, y: h - safeBottom - 78 * unit, w: 200 * unit, h: 50 * unit };
-    drawButton(ctx, unit, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text });
+    this.backRect = { x: w / 2 - 100 * u, y: h - safeBottom - 74 * u, w: 200 * u, h: 48 * u };
+    drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text });
     ctx.restore();
   }
 
@@ -121,9 +160,22 @@ export class ShopScene implements Scene {
         this.save = result.save;
         this.boughtFlash = 1;
         sfxBuy();
-      } else {
-        sfxDenied();
-      }
+      } else sfxDenied();
+      return;
+    }
+    if (this.shotgunRect && inRect(this.shotgunRect, x, y)) {
+      const result = buyShotgun();
+      if (result.ok) {
+        this.save = result.save;
+        this.boughtFlash = 1;
+        sfxBuy();
+      } else sfxDenied();
+      return;
+    }
+    for (const wr of this.weaponRects) {
+      if (!inRect(wr.rect, x, y)) continue;
+      this.save = selectWeapon(wr.weapon);
+      sfxStart();
       return;
     }
   }
