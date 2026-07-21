@@ -41,10 +41,11 @@ export class Player {
 
   constructor(
     startX: number,
+    startY: number,
     private mods: RunMods,
   ) {
     this.x = startX;
-    this.y = -1.2;
+    this.y = startY;
     this.hp = mods.maxHp;
     this.ammo = mods.maxAmmo;
   }

@@ -4,7 +4,7 @@
 import type { WeaponId } from "./config.ts";
 import { SHOTGUN_COST, UPGRADE_DEFS } from "./config.ts";
 
-const KEY = "recoildiver.save.v1";
+const KEY = "recoilriser.save.v1";
 
 export interface StageRecord {
   bestScore: number;

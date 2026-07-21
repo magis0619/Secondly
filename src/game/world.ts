@@ -1,7 +1,7 @@
 import { damp } from "../core/math.ts";
 import type { EnemyKind, RunMods, TileKind, WeaponDef } from "./config.ts";
 import {
-  CAMERA, COMBO, ENEMY_AI, ENEMY_DEFS, GLASS_BREAK_DELAY, PHYS, PICKUP, PLAYER, SCORE, TILE_DROPS,
+  CAMERA, COMBO, ENEMY_AI, ENEMY_DEFS, GLASS_BREAK_DELAY, LAVA, PHYS, PICKUP, PLAYER, SCORE, TILE_DROPS,
 } from "./config.ts";
 import type { Enemy, EnemyBullet } from "./enemies.ts";
 import { createEnemy, updateEnemy } from "./enemies.ts";
@@ -35,7 +35,7 @@ export type WorldEvent =
   | { type: "enemyHit"; x: number; y: number }
   | { type: "kill"; x: number; y: number; kind: EnemyKind; score: number }
   | { type: "stomp"; x: number; y: number }
-  | { type: "land"; speed: number; perfect: boolean }
+  | { type: "land"; speed: number; perfect: boolean; hard: boolean }
   | { type: "reload" }
   | { type: "damage"; hpLeft: number; cause: string; x: number; y: number }
   | { type: "cp"; row: number }
@@ -48,6 +48,7 @@ export type WorldEvent =
   | { type: "comboAdd"; n: number }
   | { type: "comboBank"; n: number; gems: number }
   | { type: "overdrive" }
+  | { type: "lavaWarn"; dist: number }
   | { type: "clear"; score: number; gems: number; timeMs: number; stars: boolean[] }
   | { type: "failed"; score: number; gems: number };
 
@@ -73,18 +74,26 @@ export class World {
   status: WorldStatus = "playing";
   events: WorldEvent[] = [];
   lastLandSpeed = 0;
+  /** 溶岩の水面(行。時間で減少=上昇してくる) */
+  lavaY = 0;
   /** 画面の可視行数(敵の起動判定用。シーンが毎フレーム設定) */
   visibleRows = 14;
 
   private passedCp = new Set<number>();
   private glassTimers = new Map<number, number>();
   private emptyClickT = 0;
+  private meltRow: number;
+  private lavaWarnT = 0;
 
   constructor(stage: StageDef, mods: RunMods) {
     this.stage = stage;
     const compiled = buildStage(stage);
     this.terrain = compiled.terrain;
-    this.player = new Player(this.terrain.cols / 2, mods);
+    // 底のスタート足場の上から開始。溶岩はさらに下から追ってくる
+    this.player = new Player(this.terrain.cols / 2, this.terrain.rows - 1 - PHYS.PLAYER_R - 0.05, mods);
+    this.lavaY = this.terrain.rows + 3;
+    this.meltRow = this.terrain.rows;
+    this.camera.y = this.player.y;
     for (const s of compiled.enemies) {
       this.enemies.push(createEnemy(s.kind, s.col, s.row, this.terrain));
     }
@@ -138,13 +147,38 @@ export class World {
       }
     }
 
-    // チェックポイント
+    // チェックポイント(上向きに通過で発動)
     for (const row of t.checkpoints) {
-      if (!this.passedCp.has(row) && p.y >= row) {
+      if (!this.passedCp.has(row) && p.y <= row) {
         this.passedCp.add(row);
         p.refillAmmo(PLAYER.CP_AMMO);
         this.events.push({ type: "cp", row });
       }
+    }
+
+    // 溶岩の上昇(先行しすぎたら追い上げ、追い越しはしない)
+    let lavaSpeed = this.stage.lavaSpeed;
+    if (this.lavaY - p.y > LAVA.CATCHUP_LEAD) lavaSpeed *= LAVA.CATCHUP_MULT;
+    this.lavaY -= lavaSpeed * dt;
+    // 呑まれた地形・敵・破片を溶かす
+    while (this.meltRow - 1 > this.lavaY && this.meltRow > 0) {
+      this.meltRow--;
+      for (let c = 0; c < t.cols; c++) t.tiles[this.meltRow * t.cols + c] = "empty";
+    }
+    for (const e of this.enemies) if (e.alive && e.y > this.lavaY + 0.3) e.alive = false;
+    for (const pk3 of this.pickups) if (pk3.alive && pk3.y > this.lavaY + 0.3) pk3.alive = false;
+    // 接触: 1ダメージ+上に打ち上げ(リカバリー可能)
+    if (p.y + PHYS.PLAYER_R > this.lavaY) {
+      p.takeDamage("lava", 0, 0, (hp, c) => this.onDamaged(hp, c));
+      p.y = this.lavaY - 2;
+      p.vy = LAVA.BOUNCE_VY;
+    }
+    // 接近警告(スロットル)
+    this.lavaWarnT -= dt;
+    const lavaDist = this.lavaY - (p.y + PHYS.PLAYER_R);
+    if (lavaDist < LAVA.WARN_ROWS && this.lavaWarnT <= 0 && this.status === "playing") {
+      this.lavaWarnT = 0.8;
+      this.events.push({ type: "lavaWarn", dist: Math.max(lavaDist, 0) });
     }
 
     // ハザード(トゲ・溶岩): プレイヤーが重なるタイル
@@ -155,9 +189,9 @@ export class World {
       );
     }
 
-    // 敵
-    const camTop = this.camera.y - 6;
-    const camBottom = this.camera.y + this.visibleRows + 2;
+    // 敵(アンカー0.6=画面の上6割が前方視界)
+    const camTop = this.camera.y - this.visibleRows * 0.65;
+    const camBottom = this.camera.y + this.visibleRows * 0.45;
     for (const e of this.enemies) {
       if (!e.alive) continue;
       const onScreen = e.y > camTop && e.y < camBottom;
@@ -242,11 +276,11 @@ export class World {
       if (below === "pad") this.finishClear();
     }
 
-    // カメラ
+    // カメラ(下端はステージ底まで)
     const target = p.y;
     const rate = target > this.camera.y ? CAMERA.FOLLOW_DOWN : CAMERA.FOLLOW_UP;
     this.camera.y += (target - this.camera.y) * damp(rate, dt);
-    this.camera.y = Math.max(this.camera.y, -2.5);
+    this.camera.y = Math.min(this.camera.y, this.terrain.rows - 3);
   }
 
   private fireWeapon(dx: number, dy: number, w: WeaponDef): void {
@@ -360,12 +394,10 @@ export class World {
   }
 
   private onLanded(speed: number, hard: boolean): void {
+    // 激突ダメージは廃止(上昇型では登り降りが頻繁なため過剰な罰になる)。
+    // 落下の代償は「溶岩に時間を与える」ことで十分。hardは重い着地音・揺れの演出のみ
     this.lastLandSpeed = speed;
-    if (hard) {
-      this.player.takeDamage("crash", 0, -PHYS.KNOCKBACK * 0.4, (hp, c) => this.onDamaged(hp, c));
-    } else {
-      this.events.push({ type: "land", speed, perfect: speed < 3 });
-    }
+    this.events.push({ type: "land", speed, perfect: !hard && speed < 3, hard });
     // 接地=フルリロード
     if (this.player.ammo < this.player.maxAmmo) {
       this.player.ammo = this.player.maxAmmo;
@@ -395,10 +427,10 @@ export class World {
   private finishClear(): void {
     if (this.status !== "playing") return;
     this.status = "clear";
-    const landBonus =
-      this.lastLandSpeed < 3 ? SCORE.LANDING_PERFECT : this.lastLandSpeed <= PHYS.SAFE_LAND ? SCORE.LANDING_GOOD : 0;
+    // 余裕クリアボーナス(溶岩をどれだけ引き離して登頂したか)
+    const margin = Math.max(0, Math.floor(this.lavaY - this.player.y));
     const timeBonus = Math.max(0, Math.floor(this.stage.parTime - this.elapsed)) * SCORE.TIME_BONUS_PER_SEC;
-    this.score += landBonus + timeBonus + this.player.hp * SCORE.HP_BONUS;
+    this.score += margin * SCORE.LAVA_MARGIN + timeBonus + this.player.hp * SCORE.HP_BONUS;
     const stars: boolean[] = [
       true,
       this.damageTaken === 0,

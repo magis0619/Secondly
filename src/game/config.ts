@@ -46,20 +46,32 @@ export const GRID = {
 } as const;
 
 export const CAMERA = {
-  ANCHOR_RATIO: 0.34, // プレイヤーを画面上からこの割合に
+  /** 進行方向=上を広く見せる(プレイヤーは画面のこの割合の位置。下は溶岩監視用) */
+  ANCHOR_RATIO: 0.6,
   FOLLOW_DOWN: 10,
-  FOLLOW_UP: 5,
+  FOLLOW_UP: 8,
 } as const;
 
 export const PHYS = {
-  GRAVITY: 26, // タイル/s²
-  TERMINAL: 15, // 最大落下速度
-  AIR_DRAG: 1.4, // 横速度の減衰(/s)
+  // 「世界を約35%減速+1発の反動を重く」のチューニング(操作過負荷対策)
+  GRAVITY: 17, // タイル/s²
+  TERMINAL: 10.5, // 最大落下速度
+  AIR_DRAG: 0.7, // 横速度の減衰(/s)。低め=横の勢いが残る
   PLAYER_R: 0.36, // プレイヤー半サイズ(AABB半幅、タイル)
   /** この落下速度以下で接地=無傷。超過は激突ダメージ */
-  SAFE_LAND: 9.5,
-  STOMP_BOUNCE: -9.5, // 踏みつけ後の跳ね上がり
-  KNOCKBACK: 7,
+  SAFE_LAND: 8,
+  STOMP_BOUNCE: -8.5, // 踏みつけ後の跳ね上がり
+  KNOCKBACK: 6,
+} as const;
+
+export const LAVA = {
+  /** プレイヤーがこの行数以上先行したら追い上げ加速(追いつくまで) */
+  CATCHUP_LEAD: 12,
+  CATCHUP_MULT: 2.2,
+  /** 接触時: 1ダメージ+この速度で上に打ち上げ(リカバリー可能) */
+  BOUNCE_VY: -14,
+  /** この距離(行)以内で警告演出 */
+  WARN_ROWS: 3.5,
 } as const;
 
 export const PLAYER = {
@@ -85,9 +97,9 @@ export interface WeaponDef {
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  // MGの持続推力 = rate×impulse ≈ 30 > 重力26 → 下撃ちホバーでゆっくり上昇できる程度
-  machinegun: { name: "マシンガン", rate: 9, impulse: 3.35, cost: 1, dmg: 1, speed: 42, range: 12, spreadDeg: 4, pellets: 1 },
-  shotgun: { name: "ショットガン", rate: 2.4, impulse: 11, cost: 3, dmg: 1, speed: 38, range: 6.5, spreadDeg: 24, pellets: 5 },
+  // 1発の反動を重く(下1発でふわっと1〜2行浮く)。持続推力 = rate×impulse ≈ 36 > 重力17
+  machinegun: { name: "マシンガン", rate: 5.5, impulse: 6.5, cost: 1, dmg: 1, speed: 42, range: 12, spreadDeg: 4, pellets: 1 },
+  shotgun: { name: "ショットガン", rate: 2.2, impulse: 14, cost: 3, dmg: 1, speed: 38, range: 6.5, spreadDeg: 24, pellets: 5 },
 };
 
 export type TileKind =
@@ -147,10 +159,10 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
 export const ENEMY_AI = {
   FUWARI_AMP: 0.9, // 上下浮遊の振幅(タイル)
   FUWARI_SPEED: 1.4,
-  TOGE_SPEED: 1.7, // 左右パトロール速度
-  HOUDAI_IDLE: 1.4,
-  HOUDAI_AIM: 0.8, // レーザーサイト予告時間
-  HOUDAI_SHOT_SPEED: 6,
+  TOGE_SPEED: 1.3, // 左右パトロール速度(世界減速に同調)
+  HOUDAI_IDLE: 1.6,
+  HOUDAI_AIM: 0.9, // レーザーサイト予告時間
+  HOUDAI_SHOT_SPEED: 4.5,
   HOUDAI_RANGE: 11, // この距離(タイル)以内かつ画面内でのみ起動
   ENEMY_BULLET_R: 0.18,
 } as const;
@@ -165,8 +177,8 @@ export const COMBO = {
 
 export const SCORE = {
   TILE: 20,
-  LANDING_PERFECT: 1000, // 接地速度3以下
-  LANDING_GOOD: 400, // SAFE_LAND以下
+  /** クリア時、溶岩との距離1行につき加点(余裕クリアボーナス) */
+  LAVA_MARGIN: 50,
   HP_BONUS: 500,
   TIME_BONUS_PER_SEC: 100,
   GEM_SCORE: 30,

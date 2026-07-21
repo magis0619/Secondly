@@ -114,7 +114,7 @@ export class StageSelectScene implements Scene {
           y + 10 * u,
         );
       } else {
-        ctx.fillText(`ふかさ ${buildDepth(stage.id)}m ・ めやす ${stage.parTime}s`, r.x + 82 * u, y + 10 * u);
+        ctx.fillText(`たかさ ${buildDepth(stage.id)}m ・ めやす ${stage.parTime}s`, r.x + 82 * u, y + 10 * u);
       }
     });
 

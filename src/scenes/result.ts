@@ -53,7 +53,7 @@ export class ResultScene implements Scene {
     ctx.font = `900 ${28 * u}px -apple-system, system-ui, sans-serif`;
     ctx.shadowColor = p.cleared ? "#7dff8a" : COLORS.danger;
     ctx.shadowBlur = 18 * u;
-    ctx.fillText(p.cleared ? "とうちゃく!" : "きたい たいは…", w / 2, h * 0.13);
+    ctx.fillText(p.cleared ? "とうちょう!" : "しずんだ…", w / 2, h * 0.13);
     ctx.shadowBlur = 0;
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;

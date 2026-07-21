@@ -3,8 +3,8 @@ import type { Scene } from "../core/scene.ts";
 import { resumeAudio, suspendAudio } from "../audio/audio.ts";
 import {
   sfxAmmoPickup, sfxBlocked, sfxClear, sfxComboBank, sfxCp, sfxDamage, sfxEmpty,
-  sfxEnemyHit, sfxEnemyShoot, sfxFail, sfxGem, sfxGlass, sfxKill, sfxLand, sfxOverdrive,
-  sfxReload, sfxShoot, sfxStomp, sfxTelegraph, sfxTileBreak, sfxTileHit,
+  sfxEnemyHit, sfxEnemyShoot, sfxFail, sfxGem, sfxGlass, sfxKill, sfxLand, sfxLavaWarn,
+  sfxOverdrive, sfxReload, sfxShoot, sfxStomp, sfxTelegraph, sfxTileBreak, sfxTileHit,
 } from "../audio/sfx.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
@@ -196,10 +196,7 @@ export class PlayScene implements Scene {
       }
       case "land":
         sfxLand(ev.perfect);
-        if (ev.perfect && this.world.status === "playing") {
-          const [x, y] = this.px(this.world.player.x, this.world.player.y - 1);
-          this.fx.float(x, y, "ソフトランディング", "#7dff8a", 11 * u, 0.7);
-        }
+        if (ev.hard) this.juice.shake(0.25);
         break;
       case "reload":
         sfxReload();
@@ -259,6 +256,10 @@ export class PlayScene implements Scene {
         this.fx.float(x, y, `コンボ×${ev.n} → +${ev.gems}ジェム`, COLORS.gem, 13 * u, 1);
         break;
       }
+      case "lavaWarn":
+        sfxLavaWarn();
+        this.juice.flashScreen(COLORS.tile.lava, 0.08);
+        break;
       case "overdrive": {
         sfxOverdrive();
         this.juice.flashScreen(COLORS.overdrive, 0.18);
@@ -270,14 +271,14 @@ export class PlayScene implements Scene {
         sfxClear();
         this.juice.flashScreen("#7dff8a", 0.25);
         const [x, y] = this.px(this.world.terrain.cols / 2, this.world.player.y - 2);
-        this.fx.float(x, y, "とうちゃく!", "#7dff8a", 20 * u, 1.3);
+        this.fx.float(x, y, "とうちょう!", "#7dff8a", 20 * u, 1.3);
         break;
       }
       case "failed": {
         sfxFail();
         this.juice.shake(0.8);
         const [x, y] = this.px(this.world.player.x, this.world.player.y - 2);
-        this.fx.float(x, y, "きたい たいは……", COLORS.danger, 18 * u, 1.3);
+        this.fx.float(x, y, "しずんだ……", COLORS.danger, 18 * u, 1.3);
         break;
       }
     }

@@ -57,11 +57,12 @@ export function drawHud(ctx: CanvasRenderingContext2D, vp: Viewport, world: Worl
   ctx.font = font(14 * u);
   ctx.fillText(String(world.gems), 33 * u, topY + 45 * u);
 
-  // 深度(中央)
+  // 高度(中央): 登った行数
+  const climbed = Math.max(0, Math.min(world.terrain.rows, Math.floor(world.terrain.rows - 1 - p.y)));
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.text;
   ctx.font = font(26 * u, 900);
-  ctx.fillText(`${Math.max(0, Math.floor(p.y))}m`, w / 2, topY);
+  ctx.fillText(`${climbed}m`, w / 2, topY);
   ctx.fillStyle = COLORS.textDim;
   ctx.font = font(10 * u, 700);
   ctx.fillText(`${world.stage.name} / ${world.terrain.rows}m`, w / 2, topY + 30 * u);
@@ -128,6 +129,12 @@ export function drawHud(ctx: CanvasRenderingContext2D, vp: Viewport, world: Worl
   ctx.beginPath();
   ctx.arc(meterX, meterY + meterH * (world.terrain.padRow / total), 4 * u, 0, Math.PI * 2);
   ctx.fill();
+  // 溶岩(赤、下からせり上がる)
+  const ly = meterY + meterH * Math.min(Math.max(world.lavaY, 0) / total, 1);
+  ctx.fillStyle = COLORS.tile.lava;
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(meterX - 2 * u, ly, 4 * u, meterY + meterH - ly);
+  ctx.globalAlpha = 1;
   // 自機
   ctx.fillStyle = COLORS.aim;
   const my = meterY + meterH * Math.min(Math.max(p.y, 0) / total, 1);
@@ -138,6 +145,25 @@ export function drawHud(ctx: CanvasRenderingContext2D, vp: Viewport, world: Worl
   ctx.closePath();
   ctx.fill();
 
+  // 溶岩接近インジケータ(画面下端)
+  const lavaDist = world.lavaY - p.y;
+  if (lavaDist < 9 && world.status === "playing") {
+    const danger2 = lavaDist < 4.5;
+    const pulse = danger2 ? 0.5 + 0.5 * Math.sin(world.elapsed * 10) : 0.6;
+    ctx.globalAlpha = 0.35 + 0.4 * pulse;
+    const gh2 = 5 * u;
+    const grad = ctx.createLinearGradient(0, h - 40 * u, 0, h);
+    grad.addColorStop(0, "rgba(255,90,60,0)");
+    grad.addColorStop(1, COLORS.tile.lava);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, h - 40 * u, w, 40 * u);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "center";
+    ctx.fillStyle = danger2 ? COLORS.danger : COLORS.warn;
+    ctx.font = font(12 * u, 900);
+    ctx.fillText(`▲ 溶岩 ${Math.max(0, lavaDist).toFixed(0)}m`, w / 2, h - safeBottom - gh2 - 14 * u);
+  }
+
   // 序盤ヒント
   if (world.stage.id === 1 && world.elapsed < 6 && world.status === "playing") {
     ctx.textAlign = "center";
@@ -145,7 +171,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, vp: Viewport, world: Worl
     ctx.font = font(12 * u, 700);
     ctx.globalAlpha = 0.9;
     ctx.fillText("タッチした方向に射撃 — 反動で逆へ飛ぶ", w / 2, h - safeBottom - 52 * u);
-    ctx.fillText("下を撃ってブレーキ / 岩を壊すと弾が出る", w / 2, h - safeBottom - 34 * u);
+    ctx.fillText("下を撃つとのぼれる / 足場に乗ると弾リロード", w / 2, h - safeBottom - 34 * u);
     ctx.globalAlpha = 1;
   }
   ctx.restore();

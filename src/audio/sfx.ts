@@ -153,6 +153,12 @@ export function sfxOverdrive(): void {
   tone(1320, 0.25, { type: "triangle", gain: 0.14, delay: 0.18 });
 }
 
+/** 溶岩接近の心音 */
+export function sfxLavaWarn(): void {
+  tone(70, 0.12, { type: "sine", gain: 0.3, slideTo: 45 });
+  tone(70, 0.1, { type: "sine", gain: 0.22, slideTo: 45, delay: 0.16 });
+}
+
 export function sfxClear(): void {
   const notes = [523, 659, 784, 1047, 1319];
   notes.forEach((f, i) => tone(f, 0.3, { type: "triangle", gain: 0.16, delay: i * 0.09 }));

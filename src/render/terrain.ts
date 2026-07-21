@@ -187,6 +187,43 @@ export function drawTerrain(ctx: CanvasRenderingContext2D, vp: Viewport, l: Layo
     ctx.restore();
   }
 
+  // せり上がる溶岩(全幅の液面。呑まれた領域を覆う)
+  const lavaScreenY = depthY(l, cam, world.lavaY);
+  if (lavaScreenY < vp.h + 40 * u) {
+    const top = Math.max(lavaScreenY, -20);
+    const grad = ctx.createLinearGradient(0, top, 0, Math.min(top + 260 * u, vp.h));
+    grad.addColorStop(0, COLORS.tile.lava);
+    grad.addColorStop(1, "#7a1d0c");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, top, vp.w, vp.h - top);
+    // 波打つ液面+グロー
+    ctx.save();
+    ctx.strokeStyle = COLORS.tile.lavaGlow;
+    ctx.lineWidth = 3 * u;
+    ctx.shadowColor = COLORS.tile.lava;
+    ctx.shadowBlur = 16 * u;
+    ctx.beginPath();
+    for (let x = 0; x <= vp.w; x += 8 * u) {
+      const yy = top + Math.sin(x * 0.045 + world.elapsed * 5) * 3 * u;
+      if (x === 0) ctx.moveTo(x, yy);
+      else ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // 泡
+    ctx.fillStyle = COLORS.tile.lavaGlow;
+    for (let i = 0; i < 6; i++) {
+      const bx = ((i * 137 + world.elapsed * 40) % (vp.w + 30)) - 15;
+      const pulse = 0.5 + 0.5 * Math.sin(world.elapsed * 4 + i * 2.1);
+      ctx.globalAlpha = 0.5 * pulse;
+      ctx.beginPath();
+      ctx.arc(bx, top + (14 + (i % 3) * 16) * u, (3 + pulse * 3) * u, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   // 風の可視化(ゾーン内に流線)
   for (const [a, b, ax] of t.winds) {
     if (b < r0 || a > r1) continue;

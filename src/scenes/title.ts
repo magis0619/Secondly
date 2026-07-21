@@ -86,11 +86,11 @@ export class TitleScene implements Scene {
     ctx.font = `900 ${42 * u}px -apple-system, system-ui, sans-serif`;
     ctx.shadowColor = COLORS.aim;
     ctx.shadowBlur = 22 * u;
-    ctx.fillText("RECOIL DIVER", w / 2, h * 0.15);
+    ctx.fillText("RECOIL RISER", w / 2, h * 0.15);
     ctx.shadowBlur = 0;
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${15 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("― 撃て。反動で、降りろ。―", w / 2, h * 0.15 + 38 * u);
+    ctx.fillText("― 撃て。反動で、登れ。―", w / 2, h * 0.15 + 38 * u);
 
     // 進行サマリ
     if (this.gems > 0 || this.starCount > 0) {
@@ -107,9 +107,9 @@ export class TitleScene implements Scene {
     // 操作説明
     ctx.fillStyle = COLORS.aim;
     ctx.font = `700 ${13 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("タッチした方向に射撃 → 反動で逆へ飛ぶ", w / 2, h * 0.76);
+    ctx.fillText("下を撃つと反動でのぼれる / 足場でリロード", w / 2, h * 0.76);
     ctx.fillStyle = COLORS.gem;
-    ctx.fillText("岩をこわすと弾が出る / 白い敵はふめる", w / 2, h * 0.76 + 22 * u);
+    ctx.fillText("せまりくる溶岩より先に、頂上へ!", w / 2, h * 0.76 + 22 * u);
 
     ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.t * 4);
     ctx.fillStyle = COLORS.text;
