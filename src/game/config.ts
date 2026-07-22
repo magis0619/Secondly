@@ -89,8 +89,8 @@ export const ZONE_BLEND = 8;
  * 設定手順はREADME参照。Sparkプラン無料枠で動作する。
  */
 export const ONLINE = {
-  projectId: "", // 例: "climb30-xxxxx"
-  apiKey: "", // FirebaseコンソールのウェブAPIキー
+  projectId: "climb30-6f201", // 例: "climb30-xxxxx"
+  apiKey: "AIzaSyAXuC6n6oFKJGVnJY0aTD7L5qAHbGF6oUk", // FirebaseコンソールのウェブAPIキー
   collection: "scores",
   TOP_N: 50,
   MAX_SCORE: 1000,
