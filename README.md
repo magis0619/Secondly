@@ -90,6 +90,8 @@ npm run build    # 型チェック+本番ビルド(dist/)
 
 iOS書き出し(Mac上): `docs/ios-setup.md` 参照。**先に本ブランチをcheckoutすること**(mainにはコードがない)。
 
+**App Storeリリース**: 手順書 `docs/release-checklist.md`(AdMob/課金の差し替えコード・審査対策込み)。プライバシーポリシー雛形は `docs/privacy-policy.md`、ストア掲載文は `docs/store-listing.md`、アイコン/起動画面は `assets/appstore/`。
+
 ## 構成(最小)
 
 ```

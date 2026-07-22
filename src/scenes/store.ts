@@ -1,7 +1,7 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
-import { COLORS } from "../game/config.ts";
+import { COLORS, LEGAL } from "../game/config.ts";
 import type { Product } from "../game/monetize.ts";
 import { PRODUCTS, purchase, restorePurchases } from "../game/monetize.ts";
 import type { SaveData } from "../game/save.ts";
@@ -18,6 +18,7 @@ export class StoreScene implements Scene {
   private toast: { text: string; t: number } | null = null;
   private rows: { rect: Rect; p: Product }[] = [];
   private restoreRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private privacyRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(private app: App) {}
@@ -126,6 +127,15 @@ export class StoreScene implements Scene {
     ctx.fillText("こうにゅうを ふっこうする(リストア)", w / 2, this.restoreRect.y + 15 * u);
     ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText("※ 開発ビルドでは擬似購入です(実際の請求はありません)", w / 2, this.restoreRect.y + 40 * u);
+    // プライバシーポリシー(URL設定時のみ。広告/課金ありアプリの審査必須要件)
+    if (LEGAL.privacyUrl) {
+      this.privacyRect = { x: w / 2 - 120 * u, y: this.restoreRect.y + 54 * u, w: 240 * u, h: 26 * u };
+      ctx.fillStyle = COLORS.accent;
+      ctx.font = `700 ${11 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText("プライバシーポリシー ↗", w / 2, this.privacyRect.y + 13 * u);
+    } else {
+      this.privacyRect = { x: 0, y: 0, w: 0, h: 0 };
+    }
 
     this.backRect = { x: w / 2 - 100 * u, y: h - safeBottom - 76 * u, w: 200 * u, h: 50 * u };
     drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text });
@@ -160,6 +170,10 @@ export class StoreScene implements Scene {
         if (ids.includes("noads")) this.save = setAdFree();
         this.toast = { text: ids.length > 0 ? "ふっこう しました!" : "ふっこうする こうにゅうは ありません", t: 2.2 };
       });
+      return;
+    }
+    if (LEGAL.privacyUrl && inRect(this.privacyRect, x, y)) {
+      window.open(LEGAL.privacyUrl, "_blank");
       return;
     }
     if (inRect(this.backRect, x, y)) {

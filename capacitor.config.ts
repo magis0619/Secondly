@@ -7,13 +7,15 @@ import type { CapacitorConfig } from "@capacitor/cli";
 //   CAPACITOR=1 npm run build
 //   npx cap add ios && npx cap sync ios
 const config: CapacitorConfig = {
-  // App Store の Bundle ID。公開前に本人のものへ確定すること（例: com.yourname.secondly）。
+  // ★リリース前に必ず自分の Bundle ID へ変更すること（例: com.yourname.climb30）。
+  //   App Store で一意である必要があり、後から変更できない。docs/release-checklist.md 参照。
   appId: "com.example.secondly",
   appName: "CLIMB 30",
   webDir: "dist",
   ios: {
-    // WKWebView の背景色（セーフエリア外/スクロールバウンス時に見える色）。テーマに合わせる。
-    backgroundColor: "#0a0e1a",
+    // WKWebView の背景色（起動直後/セーフエリア外に見える色）。
+    // スプラッシュ（assets/appstore/splash-2732.png）の山の色に合わせている。
+    backgroundColor: "#472a66",
     // ステータスバー領域は content 側で扱う（index.html は viewport-fit=cover 対応済み）。
     contentInset: "never",
   },

@@ -1,5 +1,8 @@
 # iOS ネイティブ化手順（Capacitor）
 
+> **App Store へのリリース準備は [`release-checklist.md`](./release-checklist.md) に一本化した。**
+> 本ファイルは開発ビルドを実機で動かすまでの最短手順。
+
 本プロジェクトは Web（TypeScript + Canvas + Vite）で完結しており、iOS への書き出しは
 Capacitor で行う。**ネイティブ化の作業は Mac + Xcode が必要**。Linux/CI 上では
 `npm run dev` / `npm run build` によるブラウザ動作確認までを行う。

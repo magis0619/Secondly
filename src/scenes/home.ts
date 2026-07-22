@@ -1,14 +1,21 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
+import { TAU } from "../core/math.ts";
 import { sfxStart } from "../audio/sfx.ts";
-import { COLORS, LAYOUT, ONLINE } from "../game/config.ts";
+import { COLORS, ONLINE } from "../game/config.ts";
 import { ensureIdentity, setPlayerName } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
-import { drawButton, inRect } from "../render/ui.ts";
+import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { AdGateScene } from "./adgate.ts";
 import { GameScene } from "./game.ts";
 import { RankingScene } from "./ranking.ts";
 import { StoreScene } from "./store.ts";
+
+/** タイトルのテーマ色(本編ゆうぐれゾーンの明るい版) */
+const SKY = { top: "#6b4a9e", mid: "#e0704a", bottom: "#ffc46e" };
+const MOUNTAIN = "#472a66";
+const GROUND = "#33204d";
+const INK = "#3a2260"; // ロゴの縁取り
 
 export class HomeScene implements Scene {
   private t = 0;
@@ -36,85 +43,278 @@ export class HomeScene implements Scene {
     this.t += dt;
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    const { vp } = this.app;
-    const { w, h, unit: u } = vp;
-    ctx.fillStyle = COLORS.bg;
+  // ==================== 背景 ====================
+
+  private drawBackdrop(ctx: CanvasRenderingContext2D): void {
+    const { w, h, unit: u } = this.app.vp;
+    // 夕焼けグラデ
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, SKY.top);
+    g.addColorStop(0.55, SKY.mid);
+    g.addColorStop(0.85, SKY.bottom);
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
-    // デコ: ジグザグの足場と跳ねるキャラ
-    const cx = w / 2;
-    const baseY = h * 0.52;
-    const hop = Math.abs(Math.sin(this.t * 2.4));
-    const step = Math.floor(this.t * 2.4 / Math.PI) % 4; // 今いる段
-    for (let i = 0; i < 4; i++) {
-      const px = cx + (i % 2 === 0 ? -1 : 1) * LAYOUT.COL_OFFSET * u * 0.8;
-      const py = baseY - i * 48 * u;
-      ctx.fillStyle = COLORS.platform;
-      ctx.beginPath();
-      ctx.roundRect(px - 48 * u, py, 96 * u, 13 * u, 6 * u);
-      ctx.fill();
-      ctx.fillStyle = COLORS.platformTop;
-      ctx.fillRect(px - 48 * u, py, 96 * u, 4 * u);
-      if (i === step) {
-        const r = 14 * u;
-        ctx.fillStyle = COLORS.player;
-        ctx.shadowColor = COLORS.accent;
-        ctx.shadowBlur = 10 * u;
+    // 大きな太陽(にじむ光つき)
+    const sx = w * 0.84;
+    const sy = h * 0.415;
+    ctx.fillStyle = "rgba(255,220,150,0.35)";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 58 * u, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#ffdf8e";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 36 * u, 0, TAU);
+    ctx.fill();
+
+    // ふわふわ雲(ゆっくり流れる)
+    ctx.fillStyle = "rgba(255,245,235,0.5)";
+    const clouds: [number, number, number][] = [
+      [0.16, 40, 1.0],
+      [0.30, 90, 0.8],
+      [0.44, 160, 1.15],
+    ];
+    for (let i = 0; i < clouds.length; i++) {
+      const [hy, off, sc] = clouds[i];
+      const cx = ((off + this.t * (7 + i * 4) * u) % (w + 220 * u)) - 110 * u;
+      const cy = h * hy;
+      for (const [ox, oy, r] of [[0, 0, 26], [22, -7, 19], [-23, -4, 17], [9, 7, 21]] as const) {
         ctx.beginPath();
-        ctx.roundRect(px - r * 0.8, py - r * 2 - 4 * u - hop * 18 * u, r * 1.6, r * 2, r * 0.7);
+        ctx.arc(cx + ox * sc * u, cy + oy * sc * u, r * sc * u, 0, TAU);
         ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = COLORS.accent2;
-        ctx.fillRect(px - r * 0.8, py - r * 2 - 4 * u - hop * 18 * u + r * 0.25, r * 1.6, r * 0.28);
       }
     }
 
-    // ロゴ
-    ctx.save();
+    // 山なみ2層+地面(ボタンの下地になる濃い帯)
+    const ridge = (baseY: number, amp: number, seedStep: number, col: string) => {
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(0, h + 10);
+      for (let x = 0; x <= w; x += w / 7) {
+        const k = Math.floor(x / (w / 7)) + seedStep;
+        const bump = (Math.sin(k * 12.9898) * 43758.5453) % 1;
+        ctx.lineTo(x, baseY - (12 + Math.abs(bump) * amp) * u);
+      }
+      ctx.lineTo(w, h + 10);
+      ctx.fill();
+    };
+    ridge(h * 0.62, 70, 3, "rgba(90,50,130,0.45)");
+    ridge(h * 0.66, 55, 11, MOUNTAIN);
+    ctx.fillStyle = GROUND;
+    ctx.fillRect(0, h * 0.72, w, h);
+  }
+
+  // ==================== ロゴ ====================
+
+  private drawLogo(ctx: CanvasRenderingContext2D): void {
+    const { w, h, unit: u } = this.app.vp;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = COLORS.text;
-    ctx.font = `900 ${52 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.shadowColor = COLORS.accent;
-    ctx.shadowBlur = 22 * u;
-    ctx.fillText("CLIMB 30", w / 2, h * 0.14);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = COLORS.textDim;
-    ctx.font = `700 ${15 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("30びょうで どこまで のぼれる?", w / 2, h * 0.14 + 42 * u);
+    ctx.lineJoin = "round";
 
-    if (this.best > 0) {
-      ctx.fillStyle = COLORS.gold;
-      ctx.font = `800 ${16 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(`ベスト ${this.best}m`, w / 2, h * 0.23);
+    // 「CLIMB」: 1文字ずつ時間差でぷよん
+    const word = "CLIMB";
+    const lw = 44 * u;
+    const x0 = w / 2 - ((word.length - 1) * lw) / 2;
+    const baseY = h * 0.105;
+    for (let i = 0; i < word.length; i++) {
+      const bounce = Math.max(0, Math.sin(this.t * 2.6 - i * 0.55));
+      const rot = Math.sin(this.t * 1.4 + i * 1.7) * 0.05;
+      ctx.save();
+      ctx.translate(x0 + i * lw, baseY - bounce * 9 * u);
+      ctx.rotate(rot);
+      ctx.font = `900 ${50 * u}px ${FONT}`;
+      // 落ち影 → 縁取り → 白文字
+      ctx.fillStyle = "rgba(58,34,96,0.35)";
+      ctx.fillText(word[i], 3 * u, 4 * u);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 9 * u;
+      ctx.strokeText(word[i], 0, 0);
+      ctx.fillStyle = "#fff8ef";
+      ctx.fillText(word[i], 0, 0);
+      ctx.restore();
     }
 
-    // プレイヤー名(タップで変更)。支援者は⭐
-    this.nameRect = { x: w / 2 - 110 * u, y: h * 0.265, w: 220 * u, h: 30 * u };
-    ctx.fillStyle = COLORS.textDim;
-    ctx.font = `700 ${13 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(`${this.supporter > 0 ? "⭐ " : ""}${this.name} ✏️`, w / 2, this.nameRect.y + 15 * u);
+    // 「30」: ゴールドの大きなバッジ風(ゆらゆら)
+    ctx.save();
+    ctx.translate(w / 2, h * 0.195);
+    ctx.rotate(-0.06 + Math.sin(this.t * 1.8) * 0.025);
+    ctx.font = `900 ${64 * u}px ${FONT}`;
+    ctx.fillStyle = "rgba(58,34,96,0.35)";
+    ctx.fillText("30", 4 * u, 5 * u);
+    ctx.strokeStyle = "#fff8ef";
+    ctx.lineWidth = 11 * u;
+    ctx.strokeText("30", 0, 0);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 4 * u;
+    ctx.strokeText("30", 0, 0);
+    ctx.fillStyle = COLORS.gold;
+    ctx.fillText("30", 0, 0);
+    ctx.restore();
 
-    // ボタン: れんしゅう / ほんばん(+広告の明示) / ランキング・ストア
+    // キャッチコピー
+    ctx.font = `800 ${14 * u}px ${FONT}`;
+    ctx.strokeStyle = "rgba(58,34,96,0.55)";
+    ctx.lineWidth = 4 * u;
+    ctx.strokeText("30びょうで どこまで のぼれる?", w / 2, h * 0.255);
+    ctx.fillStyle = "#fff8ef";
+    ctx.fillText("30びょうで どこまで のぼれる?", w / 2, h * 0.255);
+  }
+
+  // ==================== マスコット ====================
+
+  private drawMascot(ctx: CanvasRenderingContext2D): void {
+    const { w, h, unit: u } = this.app.vp;
+    const px = w / 2;
+    const platY = h * 0.54;
+    const r = 30 * u;
+
+    // 浮かぶ足場(草つき)
+    const pw = 150 * u;
+    ctx.fillStyle = "rgba(58,34,96,0.35)";
+    ctx.beginPath();
+    ctx.roundRect(px - pw / 2 + 3 * u, platY + 4 * u, pw, 20 * u, 10 * u);
+    ctx.fill();
+    ctx.fillStyle = "#5d4a94";
+    ctx.beginPath();
+    ctx.roundRect(px - pw / 2, platY, pw, 20 * u, 10 * u);
+    ctx.fill();
+    ctx.fillStyle = "#8a76c9";
+    ctx.beginPath();
+    ctx.roundRect(px - pw / 2, platY, pw, 6 * u, [10 * u, 10 * u, 0, 0]);
+    ctx.fill();
+    ctx.strokeStyle = "#5a8c4a";
+    ctx.lineWidth = 2 * u;
+    for (const gx of [-0.32, 0.08, 0.38]) {
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(px + gx * pw + i * 4 * u, platY);
+        ctx.quadraticCurveTo(px + gx * pw + i * 6 * u, platY - 6 * u, px + gx * pw + i * 8 * u, platY - 9 * u);
+        ctx.stroke();
+      }
+    }
+
+    // ぴょんぴょん跳ねるキャラ(本編と同じ見た目を大きく)
+    const hop = Math.abs(Math.sin(this.t * 2.3));
+    const grounded = hop < 0.22;
+    const sq = grounded ? (0.22 - hop) / 0.22 : 0;
+    const sy = 1 - sq * 0.22 + (grounded ? 0 : 0.06 * hop);
+    const sx = 1 + sq * 0.18 - (grounded ? 0 : 0.04 * hop);
+    const armLift = Math.max(0, (hop - 0.25) / 0.75);
+    const blink = Math.sin(this.t * 0.9 + 2) > 0.985;
+
+    ctx.save();
+    ctx.translate(px, platY - r - 5 * u - hop * 40 * u);
+    ctx.scale(sx, sy);
+
+    // 腕
+    ctx.strokeStyle = COLORS.player;
+    ctx.lineCap = "round";
+    ctx.lineWidth = 8 * u;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.7, -r * 0.05);
+      ctx.lineTo(s * r * (1.05 + 0.12 * armLift), -r * 0.05 - armLift * r * 0.95);
+      ctx.stroke();
+    }
+    // 脚
+    ctx.lineWidth = 9 * u;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.35, r * 0.85);
+      ctx.lineTo(s * r * 0.42, r * (1.25 - armLift * 0.3));
+      ctx.stroke();
+    }
+    // 体
+    ctx.fillStyle = COLORS.player;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.82, -r, r * 1.64, r * 2, r * 0.72);
+    ctx.fill();
+    // バンダナ+しっぽ
+    ctx.fillStyle = COLORS.accent2;
+    ctx.fillRect(-r * 0.82, -r * 0.72, r * 1.64, r * 0.3);
+    const wob = Math.sin(this.t * 9) * 3.5 * u;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.7, -r * 0.6);
+    ctx.quadraticCurveTo(r * 1.3, -r * 0.5 + wob, r * 1.7, -r * 0.2 + wob * 1.4);
+    ctx.quadraticCurveTo(r * 1.25, -r * 0.28, r * 0.75, -r * 0.38);
+    ctx.fill();
+    // 目とほっぺ
+    ctx.fillStyle = "#1c2743";
+    for (const s of [-1, 1]) {
+      if (blink) {
+        ctx.fillRect(s * r * 0.28 - r * 0.14, -r * 0.22, r * 0.28, 2 * u);
+      } else {
+        ctx.beginPath();
+        ctx.arc(s * r * 0.28, -r * 0.22, r * 0.14, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = "rgba(255,79,163,0.4)";
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(s * r * 0.52, r * 0.05, r * 0.13, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ==================== 全体 ====================
+
+  draw(ctx: CanvasRenderingContext2D): void {
+    const { vp } = this.app;
+    const { w, h, unit: u } = vp;
+
+    this.drawBackdrop(ctx);
+    ctx.save();
+    this.drawMascot(ctx);
+    this.drawLogo(ctx);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // プレイヤー名(タップで変更)。支援者は⭐
+    this.nameRect = { x: w / 2 - 110 * u, y: h * 0.285, w: 220 * u, h: 30 * u };
+    ctx.font = `800 ${13 * u}px ${FONT}`;
+    const nameLabel = `${this.supporter > 0 ? "⭐ " : ""}${this.name} ✏️`;
+    ctx.strokeStyle = "rgba(58,34,96,0.5)";
+    ctx.lineWidth = 3.5 * u;
+    ctx.strokeText(nameLabel, w / 2, this.nameRect.y + 15 * u);
+    ctx.fillStyle = "#fff2df";
+    ctx.fillText(nameLabel, w / 2, this.nameRect.y + 15 * u);
+
+    if (this.best > 0) {
+      ctx.font = `900 ${15 * u}px ${FONT}`;
+      ctx.strokeStyle = "rgba(58,34,96,0.55)";
+      ctx.lineWidth = 4 * u;
+      ctx.strokeText(`👑 ベスト ${this.best}m`, w / 2, h * 0.335);
+      ctx.fillStyle = COLORS.gold;
+      ctx.fillText(`👑 ベスト ${this.best}m`, w / 2, h * 0.335);
+    }
+
+    // ボタン(座標は従来のまま。ふわっと浮遊)
+    const floatY = Math.sin(this.t * 1.7) * 2 * u;
     const bw = 250 * u;
     const bx = w / 2 - bw / 2;
     this.practiceRect = { x: bx, y: h * 0.6, w: bw, h: 50 * u };
     this.rankedRect = { x: bx, y: h * 0.6 + 64 * u, w: bw, h: 56 * u };
-    drawButton(ctx, u, this.practiceRect, "れんしゅう", { bg: COLORS.accent, fontPx: 17 * u });
-    drawButton(ctx, u, this.rankedRect, "🌏 ほんばん", { bg: COLORS.accent2, fontPx: 19 * u });
+    ctx.save();
+    ctx.translate(0, floatY);
+    drawButton(ctx, u, this.practiceRect, "れんしゅう", { bg: "#43d9a3", fg: "#0c3527", fontPx: 17 * u });
+    drawButton(ctx, u, this.rankedRect, "🌏 ほんばん", { bg: COLORS.accent2, fg: "#fff", fontPx: 19 * u });
+    ctx.restore();
     let rowY = this.rankedRect.y + this.rankedRect.h + 12 * u;
     if (!this.adFree) {
-      ctx.fillStyle = COLORS.textDim;
-      ctx.font = `700 ${10.5 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `800 ${10.5 * u}px ${FONT}`;
+      ctx.fillStyle = "rgba(255,242,223,0.85)";
       ctx.fillText("▶ ほんばんは プレイまえに こうこくが ながれます", w / 2, rowY);
       rowY += 20 * u;
     }
     const half = (bw - 10 * u) / 2;
     this.rankRect = { x: bx, y: rowY, w: half, h: 44 * u };
     this.storeRect = { x: bx + half + 10 * u, y: rowY, w: half, h: 44 * u };
-    drawButton(ctx, u, this.rankRect, "🏆 ランキング", { bg: "#25314f", fg: COLORS.text, fontPx: 12.5 * u });
-    drawButton(ctx, u, this.storeRect, "🛒 ストア", { bg: "#25314f", fg: COLORS.text, fontPx: 12.5 * u });
+    drawButton(ctx, u, this.rankRect, "🏆 ランキング", { bg: "#7a5cc9", fg: "#fff", fontPx: 12.5 * u });
+    drawButton(ctx, u, this.storeRect, "🛒 ストア", { bg: "#f5a03c", fg: "#4a2c00", fontPx: 12.5 * u });
     ctx.restore();
   }
 

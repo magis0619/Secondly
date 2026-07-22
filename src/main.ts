@@ -5,12 +5,12 @@ import { createInput } from "./core/input.ts";
 import { startLoop } from "./core/loop.ts";
 import { SceneManager } from "./core/scene.ts";
 import { createViewport } from "./core/viewport.ts";
-import { COLORS, ONLINE } from "./game/config.ts";
+import { COLORS, LEGAL, ONLINE } from "./game/config.ts";
 import { HomeScene } from "./scenes/home.ts";
 
 // devビルド限定: 検証用にONLINE設定を注入できるようにする
 if (import.meta.env.DEV) {
-  (window as unknown as Record<string, unknown>).__cfg = { ONLINE };
+  (window as unknown as Record<string, unknown>).__cfg = { ONLINE, LEGAL };
 }
 
 const canvas = document.getElementById("screen") as HTMLCanvasElement;

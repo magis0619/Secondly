@@ -88,6 +88,15 @@ export const ZONE_BLEND = 8;
  * projectId/apiKeyが空の間はオフラインモード(ローカルのみ)。
  * 設定手順はREADME参照。Sparkプラン無料枠で動作する。
  */
+/**
+ * 法務系リンク。privacyUrlを設定するとストア画面に「プライバシーポリシー」リンクが出る。
+ * 広告/課金ありアプリの審査ではプライバシーポリシーURLが必須(docs/release-checklist.md参照)。
+ * テンプレは docs/privacy-policy.md — GitHub Pages等で公開してURLをここに貼る。
+ */
+export const LEGAL = {
+  privacyUrl: "", // 例: "https://<ユーザー名>.github.io/climb30-privacy/"
+};
+
 export const ONLINE = {
   projectId: "climb30-6f201", // 例: "climb30-xxxxx"
   apiKey: "AIzaSyAXuC6n6oFKJGVnJY0aTD7L5qAHbGF6oUk", // FirebaseコンソールのウェブAPIキー
