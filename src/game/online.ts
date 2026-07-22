@@ -19,6 +19,15 @@ function base(): string {
   return `https://firestore.googleapis.com/v1/projects/${ONLINE.projectId}/databases/(default)/documents`;
 }
 
+/** 通信タイムアウト(ms)。固まると無限スピナーになるため必須 */
+const TIMEOUT_MS = 8000;
+
+function timeoutSignal(): AbortSignal {
+  const c = new AbortController();
+  setTimeout(() => c.abort(), TIMEOUT_MS);
+  return c.signal;
+}
+
 /** 自己ベストを送信(上書き)。成功したらtrue。失敗は握りつぶす(次回再送) */
 export async function submitScore(playerId: string, name: string, score: number): Promise<boolean> {
   if (!onlineEnabled()) return false;
@@ -29,6 +38,7 @@ export async function submitScore(playerId: string, name: string, score: number)
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        signal: timeoutSignal(),
         body: JSON.stringify({
           fields: {
             name: { stringValue: name.slice(0, ONLINE.NAME_MAX) },
@@ -51,6 +61,7 @@ export async function fetchTop(): Promise<WorldEntry[] | null> {
     const res = await fetch(`${base()}:runQuery?key=${ONLINE.apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: timeoutSignal(),
       body: JSON.stringify({
         structuredQuery: {
           from: [{ collectionId: ONLINE.collection }],
