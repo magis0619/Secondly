@@ -1,33 +1,25 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
-import { sfxStart } from "../audio/sfx.ts";
+import { sfxBest, sfxStart } from "../audio/sfx.ts";
 import { COLORS } from "../game/config.ts";
-import type { StageDef } from "../game/stages.ts";
-import { STAGES } from "../game/stages.ts";
-import { drawGemIcon, formatScore } from "../render/hud.ts";
-import { drawBackground } from "../render/renderer.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
-import { PlayScene } from "./play.ts";
-import { ShopScene } from "./shop.ts";
-import { StageSelectScene } from "./stageselect.ts";
+import { GameScene } from "./game.ts";
+import { HomeScene } from "./home.ts";
+import { RankingScene } from "./ranking.ts";
 
 export interface ResultParams {
-  stage: StageDef;
   score: number;
-  timeMs: number;
-  cleared: boolean;
-  stars: [boolean, boolean, boolean];
-  gems: number;
+  rank: number; // 1始まり。圏外は-1
   newBest: boolean;
-  totalGems: number;
+  best: number;
 }
 
-const COUNTUP_TIME = 0.9;
-const STAR_LABELS = ["クリア", "ノーダメージ", "ジェム80%"];
+const COUNTUP = 0.8;
 
 export class ResultScene implements Scene {
   private t = 0;
+  private bestPlayed = false;
   private buttons: { rect: Rect; action: () => void; label: string; bg?: string; fg?: string }[] = [];
 
   constructor(
@@ -37,102 +29,68 @@ export class ResultScene implements Scene {
 
   update(dt: number): void {
     this.t += dt;
+    if (this.params.newBest && !this.bestPlayed && this.t > COUNTUP) {
+      this.bestPlayed = true;
+      sfxBest();
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
     const { vp } = this.app;
     const { w, h, unit: u } = vp;
     const p = this.params;
-    drawBackground(ctx, vp);
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, w, h);
 
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    ctx.fillStyle = p.cleared ? "#7dff8a" : COLORS.danger;
-    ctx.font = `900 ${28 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.shadowColor = p.cleared ? "#7dff8a" : COLORS.danger;
-    ctx.shadowBlur = 18 * u;
-    ctx.fillText(p.cleared ? "とうちょう!" : "しずんだ…", w / 2, h * 0.13);
+    ctx.fillStyle = COLORS.gold;
+    ctx.font = `900 ${30 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.shadowColor = COLORS.gold;
+    ctx.shadowBlur = 16 * u;
+    ctx.fillText("けっか", w / 2, h * 0.14);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = COLORS.textDim;
-    ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(`${p.stage.id}. ${p.stage.name}`, w / 2, h * 0.13 + 30 * u);
 
-    // 星(順番にポップ)
-    for (let i = 0; i < 3; i++) {
-      const on = p.stars[i] && this.t > 0.3 + i * 0.25;
-      const x = w / 2 + (i - 1) * 74 * u;
-      ctx.font = `900 ${(on ? 30 : 24) * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillStyle = on ? COLORS.gem : "#2a3352";
-      ctx.fillText(on ? "★" : "☆", x, h * 0.24);
-      ctx.fillStyle = COLORS.textDim;
-      ctx.font = `700 ${9 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(STAR_LABELS[i], x, h * 0.24 + 26 * u);
-    }
-
-    // スコア
-    const ratio = Math.min(this.t / COUNTUP_TIME, 1);
-    ctx.fillStyle = COLORS.textDim;
-    ctx.font = `700 ${11 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("SCORE", w / 2, h * 0.34);
+    // 高度カウントアップ
+    const ratio = Math.min(this.t / COUNTUP, 1);
     ctx.fillStyle = COLORS.text;
-    ctx.font = `900 ${38 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(formatScore(Math.floor(p.score * ratio)), w / 2, h * 0.34 + 30 * u);
-    if (ratio >= 1 && p.newBest) {
-      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.t * 6);
-      ctx.fillStyle = COLORS.gem;
-      ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText("★ NEW BEST! ★", w / 2, h * 0.34 + 58 * u);
-      ctx.globalAlpha = 1;
-    }
+    ctx.font = `900 ${64 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText(`${Math.floor(p.score * ratio)}m`, w / 2, h * 0.3);
 
-    // タイム+ジェム
-    ctx.fillStyle = COLORS.textDim;
-    ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;
-    const timeStr = p.cleared ? `タイム ${(p.timeMs / 1000).toFixed(1)}s` : "とうたつできず";
-    ctx.fillText(timeStr, w / 2 - 62 * u, h * 0.48);
-    drawGemIcon(ctx, w / 2 + 20 * u, h * 0.48, 7 * u);
-    ctx.textAlign = "left";
-    ctx.fillStyle = COLORS.gem;
-    ctx.fillText(
-      `+${p.cleared ? p.gems : Math.floor(p.gems * 0.5)} (計 ${p.totalGems})`,
-      w / 2 + 30 * u,
-      h * 0.48,
-    );
-    ctx.textAlign = "center";
-    if (!p.cleared && p.gems > 0) {
-      ctx.fillStyle = COLORS.textDim;
-      ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText("しっぱいでも ジェムの半分は もちかえり!", w / 2, h * 0.48 + 20 * u);
+    if (ratio >= 1) {
+      if (p.newBest) {
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.t * 6);
+        ctx.fillStyle = COLORS.gold;
+        ctx.font = `800 ${18 * u}px -apple-system, system-ui, sans-serif`;
+        ctx.fillText("★ じこベスト こうしん! ★", w / 2, h * 0.4);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = `700 ${14 * u}px -apple-system, system-ui, sans-serif`;
+        ctx.fillText(`ベスト ${p.best}m`, w / 2, h * 0.4);
+      }
+      if (p.rank > 0) {
+        ctx.fillStyle = p.rank <= 3 ? COLORS.accent2 : COLORS.accent;
+        ctx.font = `900 ${20 * u}px -apple-system, system-ui, sans-serif`;
+        ctx.fillText(`ランキング ${p.rank}い!`, w / 2, h * 0.47);
+      }
     }
 
     // ボタン
     this.buttons = [];
     const bw = 230 * u;
-    const bh = 48 * u;
-    const bx = w / 2 - bw / 2;
-    let by = h * 0.57;
-    const addBtn = (label: string, action: () => void, bg?: string, fg?: string) => {
-      const rect = { x: bx, y: by, w: bw, h: bh };
+    const bh = 52 * u;
+    let by = h * 0.58;
+    const add = (label: string, action: () => void, bg?: string, fg?: string) => {
+      const rect = { x: w / 2 - bw / 2, y: by, w: bw, h: bh };
       this.buttons.push({ rect, action, label, bg, fg });
-      by += bh + 14 * u;
+      by += bh + 15 * u;
     };
-
-    if (p.cleared) {
-      const next = STAGES.find((s) => s.id === p.stage.id + 1);
-      if (next) {
-        addBtn(`つぎへ: ${next.name}`, () => this.app.manager.switchTo(new PlayScene(this.app, next)));
-      } else {
-        addBtn("ぜんステージ クリア!", () => this.app.manager.switchTo(new StageSelectScene(this.app)), COLORS.gem);
-      }
-      addBtn("もういちど", () => this.app.manager.switchTo(new PlayScene(this.app, p.stage)), "#25314f", COLORS.text);
-    } else {
-      addBtn("リトライ", () => this.app.manager.switchTo(new PlayScene(this.app, p.stage)));
-      addBtn("マップへ", () => this.app.manager.switchTo(new StageSelectScene(this.app)), "#25314f", COLORS.text);
-    }
-    addBtn("🔧 アップグレード", () => this.app.manager.switchTo(new ShopScene(this.app)), "#25314f", COLORS.text);
-
+    add("もういちど", () => this.app.manager.switchTo(new GameScene(this.app)), COLORS.accent2);
+    add("🏆 ランキング", () => this.app.manager.switchTo(new RankingScene(this.app, this.params.rank)), "#25314f", COLORS.text);
+    add("ホームへ", () => this.app.manager.switchTo(new HomeScene(this.app)), "#25314f", COLORS.text);
     for (const b of this.buttons) drawButton(ctx, u, b.rect, b.label, { bg: b.bg, fg: b.fg });
     ctx.restore();
   }

@@ -21,7 +21,7 @@ export function drawButton(
 ): void {
   ctx.save();
   ctx.globalAlpha = opts.disabled ? 0.35 : 1;
-  ctx.fillStyle = opts.bg ?? COLORS.tier[2];
+  ctx.fillStyle = opts.bg ?? COLORS.accent2;
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.w, r.h, r.h / 2);
   ctx.fill();

@@ -1,0 +1,155 @@
+import { GAME } from "./config.ts";
+
+/** 0=左, 1=右 */
+export type Side = 0 | 1;
+
+export type Phase = "count" | "play" | "done";
+
+export type TowerEvent =
+  | { type: "count"; n: number } // 3,2,1
+  | { type: "go" }
+  | { type: "hop"; h: number; side: Side }
+  | { type: "fall"; from: number; to: number; side: Side }
+  | { type: "tick"; left: number } // 残りURGENT秒のカウント
+  | { type: "timeup"; score: number };
+
+export type Anim =
+  | { kind: "idle" }
+  | { kind: "hop"; t: number; dur: number; from: number }
+  | { kind: "fall"; t: number; dur: number; from: number };
+
+/**
+ * ゲーム全ロジック。足場は高さhに1枚、side(h)が左右ランダム(連続はMAX_RUNまで)。
+ * h=0は全幅の地面(どちら側とも一致扱い=最終セーフティ)。
+ * ミス: 押した側の直近下の足場まで落下(同じ側が続くほど代償が大きい)。
+ */
+export class Tower {
+  sides: Side[] = [1]; // sides[0]はダミー(地面)。sides[h]がh段目
+  h = 0;
+  maxH = 0;
+  phase: Phase = "count";
+  timeLeft: number = GAME.TIME;
+  countdown: number = GAME.COUNTDOWN + 0.5;
+  anim: Anim = { kind: "idle" };
+  events: TowerEvent[] = [];
+
+  private lastCount = GAME.COUNTDOWN + 1;
+  private lastTick = GAME.URGENT + 1;
+  private run = 1;
+
+  constructor() {
+    this.ensure(8);
+  }
+
+  /** h段目の足場のサイド。h=0(地面)は両側一致扱いなので呼び出し側で特別扱い */
+  side(h: number): Side {
+    this.ensure(h);
+    return this.sides[h];
+  }
+
+  private ensure(h: number): void {
+    while (this.sides.length <= h + 4) {
+      const prev = this.sides[this.sides.length - 1];
+      let next: Side = Math.random() < 0.5 ? 0 : 1;
+      if (next === prev && this.run >= GAME.MAX_RUN) next = (1 - prev) as Side;
+      this.run = next === prev ? this.run + 1 : 1;
+      this.sides.push(next);
+    }
+  }
+
+  /** 左右タップ。受け付けたらtrue */
+  tap(d: Side): boolean {
+    if (this.phase !== "play") return false;
+    if (this.anim.kind === "fall") return false; // 落下中は操作不能(ペナルティの一部)
+    if (this.anim.kind === "hop" && this.anim.t < GAME.HOP_BUFFER) return false;
+
+    if (this.side(this.h + 1) === d) {
+      this.h += 1;
+      this.maxH = Math.max(this.maxH, this.h);
+      this.anim = { kind: "hop", t: 0, dur: GAME.HOP_TIME, from: this.h - 1 };
+      this.events.push({ type: "hop", h: this.h, side: d });
+    } else {
+      // 押した側の直近下の足場へ落下(なければ地面h=0)
+      let to = 0;
+      for (let k = this.h; k >= 1; k--) {
+        if (this.sides[k] === d) {
+          to = k;
+          break;
+        }
+      }
+      const dist = this.h + 1 - to;
+      const dur = Math.min(GAME.FALL_BASE + GAME.FALL_PER_STEP * dist, GAME.FALL_MAX);
+      this.anim = { kind: "fall", t: 0, dur, from: this.h };
+      this.events.push({ type: "fall", from: this.h, to, side: d });
+      this.h = to;
+    }
+    return true;
+  }
+
+  update(dt: number): void {
+    // アニメ進行
+    if (this.anim.kind !== "idle") {
+      this.anim.t += dt;
+      if (this.anim.t >= this.anim.dur) this.anim = { kind: "idle" };
+    }
+
+    if (this.phase === "count") {
+      this.countdown -= dt;
+      const n = Math.ceil(this.countdown);
+      if (n < this.lastCount && n >= 1) {
+        this.lastCount = n;
+        this.events.push({ type: "count", n });
+      }
+      if (this.countdown <= 0) {
+        this.phase = "play";
+        this.events.push({ type: "go" });
+      }
+      return;
+    }
+
+    if (this.phase === "play") {
+      this.timeLeft -= dt;
+      const t = Math.ceil(this.timeLeft);
+      if (this.timeLeft <= GAME.URGENT && t < this.lastTick && t >= 1) {
+        this.lastTick = t;
+        this.events.push({ type: "tick", left: t });
+      }
+      if (this.timeLeft <= 0) {
+        this.timeLeft = 0;
+        this.phase = "done";
+        this.events.push({ type: "timeup", score: this.maxH });
+      }
+    }
+  }
+
+  /** 描画用: 現在のプレイヤー高さ(アニメ補間込み) */
+  visualH(): number {
+    if (this.anim.kind === "hop") {
+      const t = Math.min(this.anim.t / this.anim.dur, 1);
+      return this.anim.from + t;
+    }
+    if (this.anim.kind === "fall") {
+      const t = Math.min(this.anim.t / this.anim.dur, 1);
+      return this.anim.from + (this.h - this.anim.from) * (t * t); // 加速落下
+    }
+    return this.h;
+  }
+
+  /** 描画用: プレイヤーの横位置(-1=左, +1=右, 地面=0) */
+  visualSide(): number {
+    const sideOf = (h: number): number => (h === 0 ? 0 : this.sides[h] === 0 ? -1 : 1);
+    if (this.anim.kind === "hop" || this.anim.kind === "fall") {
+      const t = Math.min(this.anim.t / this.anim.dur, 1);
+      const from = sideOf(this.anim.from);
+      const to = sideOf(this.h);
+      return from + (to - from) * t;
+    }
+    return sideOf(this.h);
+  }
+
+  drainEvents(): TowerEvent[] {
+    const ev = this.events;
+    this.events = [];
+    return ev;
+  }
+}

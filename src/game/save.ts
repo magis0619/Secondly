@@ -1,36 +1,21 @@
 /**
- * セーブ: localStorageに {v, data} の封筒形式。破損・非対応環境では黙ってデフォルトに落ちる。
+ * セーブ: localStorageに {v, data} の封筒形式。ベスト+ローカルランキングTOP10。
  */
-import type { WeaponId } from "./config.ts";
-import { SHOTGUN_COST, UPGRADE_DEFS } from "./config.ts";
+const KEY = "climb30.save.v1";
+const TOP_N = 10;
 
-const KEY = "recoilriser.save.v1";
-
-export interface StageRecord {
-  bestScore: number;
-  bestTimeMs: number;
-  stars: [boolean, boolean, boolean]; // クリア / ノーダメ / 回収80%
+export interface RankEntry {
+  score: number;
+  date: string; // ISO
 }
 
 export interface SaveData {
-  gems: number;
-  stageUnlocked: number;
-  stages: Record<number, StageRecord>;
-  upgrades: { magazine: number; armor: number };
-  shotgunOwned: boolean;
-  selectedWeapon: WeaponId;
+  best: number;
+  ranking: RankEntry[];
   playCount: number;
 }
 
-const DEFAULTS: SaveData = {
-  gems: 0,
-  stageUnlocked: 1,
-  stages: {},
-  upgrades: { magazine: 0, armor: 0 },
-  shotgunOwned: false,
-  selectedWeapon: "machinegun",
-  playCount: 0,
-};
+const DEFAULTS: SaveData = { best: 0, ranking: [], playCount: 0 };
 
 export function loadSave(): SaveData {
   try {
@@ -40,11 +25,7 @@ export function loadSave(): SaveData {
     if (env.v !== 1 || typeof env.data !== "object" || env.data === null) {
       return structuredClone(DEFAULTS);
     }
-    return {
-      ...structuredClone(DEFAULTS),
-      ...env.data,
-      upgrades: { ...DEFAULTS.upgrades, ...env.data.upgrades },
-    };
+    return { ...structuredClone(DEFAULTS), ...env.data };
   } catch {
     return structuredClone(DEFAULTS);
   }
@@ -58,70 +39,22 @@ function store(data: SaveData): void {
   }
 }
 
-export interface StageOutcome {
+export interface ScoreOutcome {
   save: SaveData;
+  /** ランキング入りした順位(1始まり)。圏外は-1 */
+  rank: number;
   newBest: boolean;
-  newStars: number;
 }
 
-export function persistStageResult(
-  stageId: number,
-  score: number,
-  timeMs: number,
-  gemsEarned: number,
-  stars: [boolean, boolean, boolean],
-  stageCount: number,
-): StageOutcome {
+export function addScore(score: number): ScoreOutcome {
   const save = loadSave();
-  const rec: StageRecord =
-    save.stages[stageId] ?? { bestScore: 0, bestTimeMs: 0, stars: [false, false, false] };
-  const newBest = score > rec.bestScore;
-  if (newBest) rec.bestScore = score;
-  const cleared = stars[0];
-  if (cleared && (rec.bestTimeMs === 0 || timeMs < rec.bestTimeMs)) rec.bestTimeMs = timeMs;
-  let newStars = 0;
-  for (let i = 0; i < 3; i++) {
-    if (stars[i] && !rec.stars[i]) {
-      rec.stars[i] = true;
-      newStars++;
-    }
-  }
-  if (cleared) save.stageUnlocked = Math.max(save.stageUnlocked, Math.min(stageId + 1, stageCount));
-  save.stages[stageId] = rec;
-  // 失敗時も獲得ジェムの半分は持ち帰り
-  save.gems += cleared ? gemsEarned : Math.floor(gemsEarned * 0.5);
+  const newBest = score > save.best;
+  if (newBest) save.best = score;
   save.playCount += 1;
+  save.ranking.push({ score, date: new Date().toISOString() });
+  save.ranking.sort((a, b) => b.score - a.score);
+  const idx = save.ranking.findIndex((e) => e.score === score);
+  save.ranking = save.ranking.slice(0, TOP_N);
   store(save);
-  return { save, newBest, newStars };
-}
-
-export function buyUpgrade(key: "magazine" | "armor"): { ok: boolean; save: SaveData } {
-  const save = loadSave();
-  const def = UPGRADE_DEFS.find((d) => d.key === key)!;
-  const lv = save.upgrades[key];
-  if (lv >= def.max) return { ok: false, save };
-  const cost = def.costs[lv];
-  if (save.gems < cost) return { ok: false, save };
-  save.gems -= cost;
-  save.upgrades[key] = lv + 1;
-  store(save);
-  return { ok: true, save };
-}
-
-export function buyShotgun(): { ok: boolean; save: SaveData } {
-  const save = loadSave();
-  if (save.shotgunOwned || save.gems < SHOTGUN_COST) return { ok: false, save };
-  save.gems -= SHOTGUN_COST;
-  save.shotgunOwned = true;
-  save.selectedWeapon = "shotgun";
-  store(save);
-  return { ok: true, save };
-}
-
-export function selectWeapon(w: WeaponId): SaveData {
-  const save = loadSave();
-  if (w === "shotgun" && !save.shotgunOwned) return save;
-  save.selectedWeapon = w;
-  store(save);
-  return save;
+  return { save, rank: idx >= 0 && idx < TOP_N ? idx + 1 : -1, newBest };
 }

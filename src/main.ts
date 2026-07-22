@@ -6,11 +6,7 @@ import { startLoop } from "./core/loop.ts";
 import { SceneManager } from "./core/scene.ts";
 import { createViewport } from "./core/viewport.ts";
 import { COLORS } from "./game/config.ts";
-import { validateAllStages } from "./game/stages.ts";
-import { TitleScene } from "./scenes/title.ts";
-
-// devビルドではステージデータの理不尽・詰みを機械チェック(違反はconsole.error)
-if (import.meta.env.DEV) validateAllStages();
+import { HomeScene } from "./scenes/home.ts";
 
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -18,7 +14,7 @@ const vp = createViewport(canvas);
 const input = createInput(canvas);
 
 const app = { vp, input } as App;
-const manager = new SceneManager(new TitleScene(app), COLORS.bg);
+const manager = new SceneManager(new HomeScene(app), COLORS.bg);
 app.manager = manager;
 
 input.setHandler({
