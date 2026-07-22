@@ -1,8 +1,8 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxStart } from "../audio/sfx.ts";
-import { COLORS, LAYOUT } from "../game/config.ts";
-import { loadSave } from "../game/save.ts";
+import { COLORS, LAYOUT, ONLINE } from "../game/config.ts";
+import { ensureIdentity, setPlayerName } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
 import { GameScene } from "./game.ts";
@@ -11,13 +11,17 @@ import { RankingScene } from "./ranking.ts";
 export class HomeScene implements Scene {
   private t = 0;
   private best = 0;
+  private name = "";
   private playRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private rankRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private nameRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(private app: App) {}
 
   enter(): void {
-    this.best = loadSave().best;
+    const save = ensureIdentity();
+    this.best = save.best;
+    this.name = save.playerName;
   }
 
   update(dt: number): void {
@@ -75,8 +79,14 @@ export class HomeScene implements Scene {
     if (this.best > 0) {
       ctx.fillStyle = COLORS.gold;
       ctx.font = `800 ${16 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(`ベスト ${this.best}m`, w / 2, h * 0.25);
+      ctx.fillText(`ベスト ${this.best}m`, w / 2, h * 0.24);
     }
+
+    // プレイヤー名(タップで変更)
+    this.nameRect = { x: w / 2 - 110 * u, y: h * 0.28, w: 220 * u, h: 30 * u };
+    ctx.fillStyle = COLORS.textDim;
+    ctx.font = `700 ${13 * u}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText(`${this.name} ✏️`, w / 2, this.nameRect.y + 15 * u);
 
     // ボタン
     this.playRect = { x: w / 2 - 120 * u, y: h * 0.72, w: 240 * u, h: 58 * u };
@@ -93,6 +103,11 @@ export class HomeScene implements Scene {
     } else if (inRect(this.rankRect, x, y)) {
       sfxStart();
       this.app.manager.switchTo(new RankingScene(this.app));
+    } else if (inRect(this.nameRect, x, y)) {
+      const input = window.prompt(`なまえ(${ONLINE.NAME_MAX}もじまで)`, this.name);
+      if (input !== null) {
+        this.name = setPlayerName(input).playerName;
+      }
     }
   }
 }

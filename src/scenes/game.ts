@@ -1,23 +1,61 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
-import { clamp, damp, lerp } from "../core/math.ts";
+import { TAU, clamp, damp, lerp } from "../core/math.ts";
 import {
-  sfxCount, sfxFall, sfxGo, sfxHop, sfxTick, sfxTimeup,
+  sfxCount, sfxFall, sfxGo, sfxHop, sfxTick, sfxTimeup, sfxZone,
 } from "../audio/sfx.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
-import { COLORS, GAME, LAYOUT } from "../game/config.ts";
-import { addScore, loadSave } from "../game/save.ts";
+import { COLORS, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND } from "../game/config.ts";
+import { addScore, ensureIdentity, setPendingSync } from "../game/save.ts";
+import { onlineEnabled, submitScore } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
 import { drawFx } from "../render/fx.ts";
 import { ResultScene } from "./result.ts";
 
-function hexLerp(a: string, b: string, t: number): string {
-  const pa = parseInt(a.slice(1), 16);
-  const pb = parseInt(b.slice(1), 16);
-  const ch = (sh: number) => Math.round(lerp((pa >> sh) & 255, (pb >> sh) & 255, t));
-  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+type Rgb = [number, number, number];
+function hexRgb(hex: string): Rgb {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function mix(a: Rgb, b: Rgb, t: number): Rgb {
+  return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+}
+function css([r, g, b]: Rgb, alpha = 1): string {
+  return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${alpha})`;
+}
+
+/** 高度に応じたゾーンindex */
+function zoneAt(h: number): number {
+  let i = 0;
+  for (let z = 0; z < ZONES.length; z++) if (h >= ZONES[z].from) i = z;
+  return i;
+}
+
+/** 高度に応じた空の色(ゾーン境界はZONE_BLEND mで滑らかに補間) */
+function skyColors(h: number): { top: Rgb; bottom: Rgb; tint: Rgb } {
+  const i = zoneAt(h);
+  const cur = ZONES[i];
+  const next = ZONES[i + 1];
+  let top = hexRgb(cur.skyTop);
+  let bottom = hexRgb(cur.skyBottom);
+  let tint = hexRgb(cur.tint);
+  if (next) {
+    const t = clamp((h - (next.from - ZONE_BLEND)) / ZONE_BLEND, 0, 1);
+    if (t > 0) {
+      top = mix(top, hexRgb(next.skyTop), t);
+      bottom = mix(bottom, hexRgb(next.skyBottom), t);
+      tint = mix(tint, hexRgb(next.tint), t);
+    }
+  }
+  return { top, bottom, tint };
+}
+
+function hash(n: number): number {
+  let h = (n * 2654435761) ^ 0x9e3779b9;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) >>> 0) / 4294967296;
 }
 
 export class GameScene implements Scene {
@@ -32,11 +70,16 @@ export class GameScene implements Scene {
   private goFlash = 0;
   private lastKeyDir = 0;
   private t = 0;
+  /** 着地で沈む足場: h -> 残り時間 */
+  private dips = new Map<number, number>();
+  private landSquashT = 1;
+  private lastZone = 0;
+  private banner: { text: string; t: number } | null = null;
 
   constructor(private app: App) {}
 
   enter(): void {
-    this.best = loadSave().best;
+    this.best = ensureIdentity().best;
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__climb = {
         tower: this.tower,
@@ -44,6 +87,11 @@ export class GameScene implements Scene {
         skip: () => {
           if (this.tower.phase === "count") this.tower.countdown = 0.01;
           else this.tower.timeLeft = Math.min(this.tower.timeLeft, 0.4);
+        },
+        warp: (h: number) => {
+          this.tower.h = h;
+          this.tower.maxH = Math.max(this.tower.maxH, h);
+          this.camH = h;
         },
         state: () => ({
           scene: "game",
@@ -62,6 +110,15 @@ export class GameScene implements Scene {
     const { vp, input } = this.app;
     this.juice.update(dt, 7 * vp.unit);
     this.goFlash = Math.max(this.goFlash - dt, 0);
+    this.landSquashT += dt;
+    if (this.banner) {
+      this.banner.t -= dt;
+      if (this.banner.t <= 0) this.banner = null;
+    }
+    for (const [k, v] of this.dips) {
+      if (v - dt <= 0) this.dips.delete(k);
+      else this.dips.set(k, v - dt);
+    }
 
     // 開発用: ←→キーでもタップ
     const kd = input.keyDir;
@@ -72,6 +129,7 @@ export class GameScene implements Scene {
     this.fx.update(dt);
 
     for (const ev of this.tower.drainEvents()) {
+      const u = vp.unit;
       switch (ev.type) {
         case "count":
           sfxCount();
@@ -83,7 +141,32 @@ export class GameScene implements Scene {
         case "hop": {
           sfxHop(ev.h);
           const [x, y] = this.platPos(ev.h - 1);
-          this.fx.burst(x, y, "#c9d6ff", 5, 90 * vp.unit, 3 * vp.unit);
+          this.fx.burst(x, y, "#c9d6ff", 5, 90 * u, 3 * u);
+          // ゾーン到達マイルストーン
+          const z = zoneAt(ev.h);
+          if (z > this.lastZone) {
+            this.lastZone = z;
+            sfxZone();
+            this.banner = { text: `${ZONES[z].from}m — ${ZONES[z].name}へ!`, t: 1.6 };
+            this.juice.flashScreen(ZONES[z].tint, 0.15);
+            const [bx, by] = this.platPos(ev.h);
+            this.fx.burst(bx, by - 30 * u, ZONES[z].tint, 18, 180 * u, 4 * u);
+          } else if (ev.h % 10 === 0) {
+            const [bx, by] = this.platPos(ev.h);
+            this.fx.float(bx, by - 34 * u, `${ev.h}m!`, COLORS.gold, 13 * u, 0.7);
+          }
+          break;
+        }
+        case "landed": {
+          this.dips.set(ev.h, MOTION.PLAT_DIP_TIME);
+          this.landSquashT = 0;
+          break;
+        }
+        case "fellLanded": {
+          this.dips.set(ev.h, MOTION.PLAT_DIP_TIME * 1.4);
+          this.landSquashT = -0.06; // 重い着地は少し長く潰れる
+          const [x, y] = this.platPos(ev.h);
+          this.fx.burst(x, y, "#8a93ad", 8, 120 * this.app.vp.unit, 3 * this.app.vp.unit);
           break;
         }
         case "fall": {
@@ -103,8 +186,9 @@ export class GameScene implements Scene {
       }
     }
 
-    // カメラ追従
-    this.camH += (this.tower.visualH() - this.camH) * damp(9, dt);
+    // カメラ(上へ少し先読み)
+    const camTarget = this.tower.visualH() + MOTION.CAM_LOOKAHEAD;
+    this.camH += (camTarget - this.camH) * damp(MOTION.CAM_RATE, dt);
 
     if (this.tower.phase === "done") {
       this.endT += dt;
@@ -112,6 +196,15 @@ export class GameScene implements Scene {
         this.finished = true;
         const score = this.tower.maxH;
         const outcome = addScore(score);
+        // オンライン送信(自己ベスト時のみ。失敗しても無視して次回再送)
+        if (onlineEnabled() && (outcome.newBest || outcome.save.pendingSync)) {
+          setPendingSync(true);
+          void submitScore(outcome.save.playerId, outcome.save.playerName, outcome.save.best).then(
+            (ok) => {
+              if (ok) setPendingSync(false);
+            },
+          );
+        }
         this.app.manager.switchTo(
           new ResultScene(this.app, {
             score,
@@ -128,14 +221,325 @@ export class GameScene implements Scene {
     if (this.tower.tap(d)) this.taps++;
   }
 
-  /** h段目の足場の画面座標(中心) */
+  private dipOf(h: number): number {
+    const left = this.dips.get(h);
+    if (left === undefined) return 0;
+    const t = 1 - left / MOTION.PLAT_DIP_TIME;
+    return Math.sin(Math.min(t, 1) * Math.PI) * MOTION.PLAT_DIP * this.app.vp.unit;
+  }
+
+  /** h段目の足場の画面座標(中心, 沈み込み込み) */
   private platPos(h: number): [number, number] {
     const { vp } = this.app;
     const u = vp.unit;
     const anchorY = vp.h * LAYOUT.ANCHOR;
     const x = h === 0 ? vp.w / 2 : vp.w / 2 + (this.tower.side(h) === 0 ? -1 : 1) * LAYOUT.COL_OFFSET * u;
-    const y = anchorY + (this.camH - h) * LAYOUT.STEP_H * u;
+    const y = anchorY + (this.camH - h) * LAYOUT.STEP_H * u + this.dipOf(h);
     return [x, y];
+  }
+
+  // ==================== 描画 ====================
+
+  private drawBackground(ctx: CanvasRenderingContext2D): void {
+    const { vp } = this.app;
+    const { w, h: H, unit: u } = vp;
+    const sky = skyColors(this.camH);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, css(sky.top));
+    g.addColorStop(1, css(sky.bottom));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, H);
+
+    const scroll = this.camH * LAYOUT.STEP_H * u;
+
+    // 星(高度が上がるほど濃く)
+    const starAlpha = clamp((this.camH - 12) / 30, 0, 0.9);
+    if (starAlpha > 0) {
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 26; i++) {
+        const sy = ((i * 173 + scroll * 0.25) % (H + 60)) - 30;
+        const tw = 0.5 + 0.5 * Math.sin(this.t * (1.2 + (i % 5) * 0.4) + i);
+        ctx.globalAlpha = starAlpha * (0.25 + 0.5 * tw) * (0.5 + (i % 3) * 0.25);
+        const s = (i % 4 === 0 ? 2.6 : 1.7) * u;
+        ctx.fillRect((i * 97 + 31) % w, sy, s, s);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ゆうぐれ: 山のシルエット(低高度のみ)
+    const duskAlpha = clamp(1 - this.camH / 32, 0, 1);
+    if (duskAlpha > 0) {
+      ctx.fillStyle = css(mix(hexRgb("#1c1230"), hexRgb("#2a1a40"), 0.5), duskAlpha * 0.9);
+      const baseY = H * 0.8 + scroll * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(0, H + 50);
+      for (let x = 0; x <= w; x += w / 8) {
+        ctx.lineTo(x, baseY - (30 + 70 * hash(Math.floor(x / (w / 8)))) * u);
+      }
+      ctx.lineTo(w, H + 50);
+      ctx.fill();
+      // 太陽(沈みかけ)
+      ctx.fillStyle = css(hexRgb("#ffb03c"), duskAlpha * 0.8);
+      ctx.beginPath();
+      ctx.arc(w * 0.72, H * 0.62 + scroll * 0.3, 26 * u, 0, TAU);
+      ctx.fill();
+    }
+
+    // よぞら: 月
+    const nightAlpha = clamp((this.camH - 18) / 12, 0, 1) * clamp(1 - (this.camH - 60) / 20, 0, 1);
+    if (nightAlpha > 0) {
+      const mx = w * 0.22;
+      const my = H * 0.2 + (scroll * 0.06) % (H * 0.2);
+      ctx.fillStyle = css(hexRgb("#f4ecd0"), nightAlpha * 0.95);
+      ctx.beginPath();
+      ctx.arc(mx, my, 22 * u, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = css(skyColors(this.camH).top, nightAlpha);
+      ctx.beginPath();
+      ctx.arc(mx + 9 * u, my - 5 * u, 18 * u, 0, TAU);
+      ctx.fill();
+    }
+
+    // くものうえ: 流れる雲
+    const cloudAlpha = clamp((this.camH - 42) / 12, 0, 1) * clamp(1 - (this.camH - 92) / 18, 0, 1);
+    if (cloudAlpha > 0) {
+      ctx.fillStyle = css(hexRgb("#cbd4ff"), cloudAlpha * 0.16);
+      for (let i = 0; i < 5; i++) {
+        const cy = ((i * 191 + scroll * (0.3 + (i % 3) * 0.15)) % (H + 120)) - 60;
+        const cx = ((i * 137 + this.t * (8 + i * 3) * u) % (w + 200)) - 100;
+        for (const [ox, oy, r] of [[0, 0, 30], [26, -8, 22], [-26, -4, 20], [10, 8, 24]] as const) {
+          ctx.beginPath();
+          ctx.arc(cx + ox * u, cy + oy * u, r * u, 0, TAU);
+          ctx.fill();
+        }
+      }
+    }
+
+    // うちゅう: 惑星+オーロラ帯
+    const spaceAlpha = clamp((this.camH - 72) / 14, 0, 1);
+    if (spaceAlpha > 0) {
+      const px = w * 0.78;
+      const py = H * 0.24 + (scroll * 0.04) % (H * 0.1);
+      ctx.fillStyle = css(hexRgb("#ff8a5c"), spaceAlpha * 0.9);
+      ctx.beginPath();
+      ctx.arc(px, py, 20 * u, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = css(hexRgb("#ffd166"), spaceAlpha * 0.8);
+      ctx.lineWidth = 3 * u;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 32 * u, 9 * u, -0.35, 0, TAU);
+      ctx.stroke();
+      // オーロラ
+      for (let b = 0; b < 2; b++) {
+        ctx.strokeStyle = css(hexRgb(b === 0 ? "#38e1ff" : "#ff4fa3"), spaceAlpha * 0.12);
+        ctx.lineWidth = 22 * u;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 12 * u) {
+          const yy = H * (0.3 + b * 0.12) + Math.sin(x * 0.01 + this.t * 0.8 + b * 2) * 24 * u + ((scroll * 0.1) % (40 * u));
+          if (x === 0) ctx.moveTo(x, yy);
+          else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+
+  private drawPlatform(ctx: CanvasRenderingContext2D, h: number, x: number, y: number): void {
+    const u = this.app.vp.unit;
+    const pw = (h === 0 ? this.app.vp.w / u : LAYOUT.PLAT_W) * u;
+    const ph = LAYOUT.PLAT_H * u;
+    const zone = ZONES[zoneAt(h)];
+    const tint = hexRgb(zone.tint);
+    const base = mix(hexRgb(COLORS.platform), tint, 0.18);
+    const topCol = mix(hexRgb(COLORS.platformTop), tint, 0.25);
+    const x0 = h === 0 ? 0 : x - pw / 2;
+
+    // 下影
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.roundRect(x0 + 2 * u, y + 3 * u, pw - (h === 0 ? 0 : 4 * u), ph, 7 * u);
+    ctx.fill();
+    // 本体(縦グラデ)
+    const g = ctx.createLinearGradient(0, y, 0, y + ph);
+    g.addColorStop(0, css(mix(base, [255, 255, 255], 0.12)));
+    g.addColorStop(1, css(mix(base, [0, 0, 0], 0.25)));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(x0, y, pw, ph, h === 0 ? 0 : 7 * u);
+    ctx.fill();
+    // 上面ハイライト
+    ctx.fillStyle = css(topCol);
+    ctx.beginPath();
+    ctx.roundRect(x0, y, pw, 4.5 * u, h === 0 ? 0 : [7 * u, 7 * u, 0, 0]);
+    ctx.fill();
+
+    if (h === 0) {
+      ctx.fillStyle = css(mix(base, [0, 0, 0], 0.4));
+      ctx.fillRect(0, y + ph, this.app.vp.w, this.app.vp.h - y);
+      return;
+    }
+
+    // ゾーン装飾(hでシード固定)
+    const r1 = hash(h * 7 + 1);
+    const dx = x0 + pw * (0.18 + r1 * 0.64);
+    if (zone.deco === "dusk") {
+      // 草
+      ctx.strokeStyle = css(mix(hexRgb("#5a8c4a"), tint, 0.2));
+      ctx.lineWidth = 1.6 * u;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(dx + i * 3.4 * u, y);
+        ctx.quadraticCurveTo(dx + i * 5 * u, y - 5 * u, dx + i * 6.5 * u, y - 7.5 * u);
+        ctx.stroke();
+      }
+    } else if (zone.deco === "night") {
+      // 小さな灯り
+      ctx.fillStyle = css(hexRgb("#ffde7a"), 0.5 + 0.4 * Math.sin(this.t * 3 + h));
+      ctx.beginPath();
+      ctx.arc(dx, y + ph / 2, 2.4 * u, 0, TAU);
+      ctx.fill();
+    } else if (zone.deco === "clouds") {
+      // ふわふわの縁
+      ctx.fillStyle = "rgba(230,236,255,0.5)";
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(x0 + pw * (0.2 + i * 0.3), y + 1 * u, (4 + (i % 2) * 2) * u, Math.PI, 0);
+        ctx.fill();
+      }
+    } else {
+      // クリスタル
+      ctx.fillStyle = css(tint, 0.85);
+      ctx.beginPath();
+      ctx.moveTo(dx, y - 8 * u);
+      ctx.lineTo(dx + 3.4 * u, y);
+      ctx.lineTo(dx - 3.4 * u, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 10mごとの高度ラベル
+    if (h % 10 === 0) {
+      ctx.fillStyle = COLORS.textDim;
+      ctx.font = `700 ${9 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.textAlign = x < this.app.vp.w / 2 ? "left" : "right";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(`${h}m`, x < this.app.vp.w / 2 ? x + pw / 2 + 6 * u : x - pw / 2 - 6 * u, y + 11 * u);
+    }
+  }
+
+  private drawClimber(ctx: CanvasRenderingContext2D): void {
+    const { vp } = this.app;
+    const u = vp.unit;
+    const tw = this.tower;
+    const anchorY = vp.h * LAYOUT.ANCHOR;
+    const stepH = LAYOUT.STEP_H * u;
+    const vh = tw.visualH();
+    const vx = vp.w / 2 + tw.visualSide() * LAYOUT.COL_OFFSET * u;
+    const standDip = tw.anim.kind === "idle" ? this.dipOf(tw.h) : 0;
+    const vy = anchorY + (this.camH - vh) * stepH + standDip;
+    const r = LAYOUT.PLAYER_R * u;
+
+    let jump = 0;
+    let sx = 1;
+    let sy = 1;
+    let rot = 0;
+    let armLift = 0; // 0=下ろす 1=ばんざい
+    const falling = tw.anim.kind === "fall";
+    if (tw.anim.kind === "hop") {
+      const t = Math.min(tw.anim.t / tw.anim.dur, 1);
+      jump = Math.sin(t * Math.PI) * 30 * u;
+      sy = 1 + 0.28 * Math.sin(t * Math.PI);
+      sx = 1 - 0.16 * Math.sin(t * Math.PI);
+      armLift = Math.sin(t * Math.PI);
+      rot = tw.visualSide() !== 0 ? 0.06 * Math.sin(t * Math.PI) * (tw.visualSide() > 0 ? 1 : -1) : 0;
+    } else if (falling) {
+      sy = 1.15;
+      sx = 0.88;
+      rot = Math.sin(this.t * 26) * 0.16; // 慌てふためき
+      armLift = 1;
+    } else {
+      // 着地のぼよん(潰れ→戻り)
+      const lt = clamp(this.landSquashT / MOTION.LAND_SQUASH_TIME, 0, 1);
+      const sq = Math.sin((1 - lt) * Math.PI * 0.5) * 0.3;
+      sy = 1 - sq;
+      sx = 1 + sq * 0.7;
+      // 呼吸
+      sy += 0.02 * Math.sin(this.t * 3.2);
+    }
+
+    ctx.save();
+    ctx.translate(vx, vy - r - 4 * u - jump);
+    ctx.rotate(rot);
+    ctx.scale(sx, sy);
+
+    // 腕
+    ctx.strokeStyle = COLORS.player;
+    ctx.lineCap = "round";
+    ctx.lineWidth = 4.5 * u;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.7, -r * 0.05);
+      ctx.lineTo(s * r * (1.05 + 0.1 * armLift), -r * 0.05 - armLift * r * 0.9);
+      ctx.stroke();
+    }
+    // 脚(ホップ中はたたむ)
+    ctx.lineWidth = 5 * u;
+    const legTuck = tw.anim.kind === "hop" ? Math.sin(Math.min(tw.anim.t / tw.anim.dur, 1) * Math.PI) : 0;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.35, r * 0.85);
+      ctx.lineTo(s * r * 0.42, r * (1.25 - legTuck * 0.35));
+      ctx.stroke();
+    }
+
+    // 体
+    ctx.fillStyle = COLORS.player;
+    ctx.shadowColor = COLORS.accent;
+    ctx.shadowBlur = 10 * u;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.82, -r, r * 1.64, r * 2, r * 0.72);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // バンダナ+なびくしっぽ
+    ctx.fillStyle = COLORS.accent2;
+    ctx.fillRect(-r * 0.82, -r * 0.72, r * 1.64, r * 0.3);
+    ctx.beginPath();
+    const wob = Math.sin(this.t * 9) * 3 * u;
+    ctx.moveTo(r * 0.7, -r * 0.6);
+    ctx.quadraticCurveTo(r * 1.3, -r * 0.5 + wob, r * 1.7, -r * 0.2 + wob * 1.4);
+    ctx.quadraticCurveTo(r * 1.25, -r * 0.28, r * 0.75, -r * 0.38);
+    ctx.fill();
+
+    // 目(次の足場の側を見る。落下中はぐるぐる)
+    const nextDir = tw.side(tw.h + 1) === 0 ? -1 : 1;
+    const blink = Math.sin(this.t * 0.9 + 2) > 0.985;
+    ctx.fillStyle = "#1c2743";
+    for (const s of [-1, 1]) {
+      const ex = s * r * 0.28 + nextDir * r * 0.1;
+      const ey = -r * 0.22;
+      if (falling) {
+        ctx.strokeStyle = "#1c2743";
+        ctx.lineWidth = 1.6 * u;
+        ctx.beginPath();
+        ctx.arc(s * r * 0.28, ey, r * 0.15, this.t * 14, this.t * 14 + 4.5);
+        ctx.stroke();
+      } else if (blink) {
+        ctx.fillRect(ex - r * 0.14, ey, r * 0.28, 1.4 * u);
+      } else {
+        ctx.beginPath();
+        ctx.arc(ex, ey, r * 0.14, 0, TAU);
+        ctx.fill();
+      }
+    }
+    // ほっぺ
+    ctx.fillStyle = "rgba(255,79,163,0.35)";
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(s * r * 0.52, r * 0.05, r * 0.12, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
@@ -143,21 +547,7 @@ export class GameScene implements Scene {
     const { w, h: H, unit: u, safeTop } = vp;
     const tw = this.tower;
 
-    // 背景(高度で明るく)
-    const skyT = clamp(this.camH / 120, 0, 1);
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, hexLerp(COLORS.bg, COLORS.bgTop, skyT));
-    g.addColorStop(1, COLORS.bg);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, H);
-    // 星(高度パララックス)
-    ctx.fillStyle = "#ffffff";
-    for (let i = 0; i < 14; i++) {
-      const sy = ((i * 173 + this.camH * LAYOUT.STEP_H * u * 0.3) % (H + 40)) - 20;
-      ctx.globalAlpha = 0.12 + (i % 3) * 0.08;
-      ctx.fillRect(((i * 97) % w), sy, 2 * u, 2 * u);
-    }
-    ctx.globalAlpha = 1;
+    this.drawBackground(ctx);
 
     ctx.save();
     ctx.translate(this.juice.offX, this.juice.offY);
@@ -166,127 +556,61 @@ export class GameScene implements Scene {
     const stepH = LAYOUT.STEP_H * u;
     const visTop = tw.h + 2; // 見えるのは2つ上まで
 
-    // 足場(下は画面内すべて、上はvisTopまで)
     const hMin = Math.max(0, Math.floor(this.camH - anchorY / stepH) - 1);
-    const hMax = Math.min(visTop, Math.ceil(this.camH + (H - anchorY) / stepH) + 1);
-    for (let hh = hMin; hh <= Math.max(hMax, visTop); hh++) {
-      if (hh > visTop) break;
-      const y = anchorY + (this.camH - hh) * stepH;
-      if (y < -40 || y > H + 40) continue;
-      if (hh === 0) {
-        // 地面
-        ctx.fillStyle = COLORS.ground;
-        ctx.fillRect(0, y, w, H - y + 40);
-        ctx.fillStyle = COLORS.platformTop;
-        ctx.fillRect(0, y, w, 4 * u);
-        continue;
-      }
-      const x = w / 2 + (tw.side(hh) === 0 ? -1 : 1) * LAYOUT.COL_OFFSET * u;
-      const pw = LAYOUT.PLAT_W * u;
-      const ph = LAYOUT.PLAT_H * u;
-      ctx.fillStyle = COLORS.platform;
-      ctx.beginPath();
-      ctx.roundRect(x - pw / 2, y, pw, ph, 6 * u);
-      ctx.fill();
-      ctx.fillStyle = COLORS.platformTop;
-      ctx.beginPath();
-      ctx.roundRect(x - pw / 2, y, pw, 4.5 * u, 3 * u);
-      ctx.fill();
-      // 高度ラベル(10段ごと)
-      if (hh % 10 === 0) {
-        ctx.fillStyle = COLORS.textDim;
-        ctx.font = `700 ${9 * u}px -apple-system, system-ui, sans-serif`;
-        ctx.textAlign = x < w / 2 ? "left" : "right";
-        ctx.fillText(`${hh}m`, x < w / 2 ? x + pw / 2 + 6 * u : x - pw / 2 - 6 * u, y + 11 * u);
-      }
+    for (let hh = hMin; hh <= visTop; hh++) {
+      const [x, y] = this.platPos(hh);
+      if (y < -50 || y > H + 60) continue;
+      this.drawPlatform(ctx, hh, x, y);
     }
 
     // 霧(2つ上より先は見えない)
     const fogY = anchorY + (this.camH - (visTop + 0.6)) * stepH;
     if (fogY > -10) {
+      const sky = skyColors(this.camH);
       const fg = ctx.createLinearGradient(0, fogY - 70 * u, 0, fogY + 24 * u);
-      fg.addColorStop(0, "rgba(10,14,26,1)");
-      fg.addColorStop(1, "rgba(10,14,26,0)");
+      fg.addColorStop(0, css(sky.top));
+      fg.addColorStop(1, css(sky.top, 0));
       ctx.fillStyle = fg;
       ctx.fillRect(0, 0, w, Math.max(fogY + 24 * u, 0));
-      // ハテナ
       ctx.fillStyle = COLORS.textDim;
       ctx.globalAlpha = 0.5 + 0.3 * Math.sin(this.t * 3);
       ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
       ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.fillText("? ? ?", w / 2, Math.max(fogY - 26 * u, safeTop + 96 * u));
       ctx.globalAlpha = 1;
     }
 
-    // プレイヤー(小さなクライマー)
-    {
-      const vh = tw.visualH();
-      const vx = w / 2 + tw.visualSide() * LAYOUT.COL_OFFSET * u;
-      const vy = anchorY + (this.camH - vh) * stepH;
-      const r = LAYOUT.PLAYER_R * u;
-      // ホップ中は弧を描く+スカッシュ
-      let jump = 0;
-      let sx = 1;
-      let sy = 1;
-      if (tw.anim.kind === "hop") {
-        const t = Math.min(tw.anim.t / tw.anim.dur, 1);
-        jump = Math.sin(t * Math.PI) * 26 * u;
-        sy = 1 + 0.25 * Math.sin(t * Math.PI);
-        sx = 1 - 0.15 * Math.sin(t * Math.PI);
-      } else if (tw.anim.kind === "fall") {
-        sy = 1.2;
-        sx = 0.85;
-      }
-      ctx.save();
-      ctx.translate(vx, vy - r - 4 * u - jump);
-      ctx.scale(sx, sy);
-      ctx.fillStyle = COLORS.player;
-      ctx.shadowColor = COLORS.accent;
-      ctx.shadowBlur = 10 * u;
-      ctx.beginPath();
-      ctx.roundRect(-r * 0.8, -r, r * 1.6, r * 2, r * 0.7);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      // 顔
-      ctx.fillStyle = COLORS.accent;
-      ctx.beginPath();
-      ctx.arc(-r * 0.22, -r * 0.25, r * 0.16, 0, Math.PI * 2);
-      ctx.arc(r * 0.22, -r * 0.25, r * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-      // バンダナ
-      ctx.fillStyle = COLORS.accent2;
-      ctx.fillRect(-r * 0.8, -r * 0.75, r * 1.6, r * 0.28);
-      ctx.restore();
-    }
-
+    this.drawClimber(ctx);
     drawFx(ctx, vp, this.fx);
     ctx.restore();
 
     // ==== HUD ====
     const urgent = tw.phase === "play" && tw.timeLeft <= GAME.URGENT;
-    // タイマーバー
     const bw = w * 0.56;
     const bx = w / 2 - bw / 2;
     const by = safeTop + 14 * u;
-    ctx.fillStyle = "#25314f";
+    ctx.fillStyle = "rgba(20,28,50,0.75)";
     ctx.beginPath();
-    ctx.roundRect(bx, by, bw, 10 * u, 5 * u);
+    ctx.roundRect(bx - 2 * u, by - 2 * u, bw + 4 * u, 14 * u, 7 * u);
     ctx.fill();
     const ratio = clamp(tw.timeLeft / GAME.TIME, 0, 1);
-    ctx.fillStyle = urgent ? COLORS.danger : COLORS.accent;
     if (ratio > 0) {
+      ctx.fillStyle = urgent ? COLORS.danger : COLORS.accent;
+      ctx.shadowColor = urgent ? COLORS.danger : COLORS.accent;
+      ctx.shadowBlur = 8 * u;
       ctx.beginPath();
       ctx.roundRect(bx, by, bw * ratio, 10 * u, 5 * u);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
-    // 残り秒数
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillStyle = urgent ? COLORS.danger : COLORS.text;
     const pulse = urgent ? 1 + 0.12 * Math.sin(this.t * 12) : 1;
     ctx.font = `900 ${26 * u * pulse}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(String(Math.ceil(tw.timeLeft)), w / 2, by + 16 * u);
-    // 高度(左上)
+
     ctx.textAlign = "left";
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
@@ -294,7 +618,7 @@ export class GameScene implements Scene {
     ctx.fillStyle = COLORS.text;
     ctx.font = `900 ${26 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(`${tw.maxH}m`, 16 * u, by + 12 * u);
-    // ベスト(右上)
+
     ctx.textAlign = "right";
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
@@ -303,7 +627,22 @@ export class GameScene implements Scene {
     ctx.font = `800 ${18 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(`${Math.max(this.best, tw.maxH)}m`, w - 16 * u, by + 13 * u);
 
-    // タップガイド(最初の3タップまで)
+    // マイルストーンバナー
+    if (this.banner) {
+      const a = clamp(this.banner.t / 0.3, 0, 1) * clamp((1.6 - this.banner.t) / 0.25, 0, 1);
+      ctx.globalAlpha = Math.min(a, 1);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = COLORS.gold;
+      ctx.font = `900 ${24 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.shadowColor = COLORS.gold;
+      ctx.shadowBlur = 14 * u;
+      ctx.fillText(this.banner.text, w / 2, H * 0.28);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // タップガイド
     if (this.taps < 3 && tw.phase === "play") {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -351,7 +690,9 @@ export class GameScene implements Scene {
     }
   }
 
-  onDown(x: number): void {
+  onDown(x: number, y: number): void {
+    // タップ波紋
+    this.fx.ring(x - this.juice.offX, y - this.juice.offY, COLORS.accent, 24 * this.app.vp.unit, 2 * this.app.vp.unit, 0.3);
     this.tap(x < this.app.vp.w / 2 ? 0 : 1);
   }
 }

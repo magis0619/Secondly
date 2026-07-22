@@ -1,5 +1,6 @@
 /**
- * セーブ: localStorageに {v, data} の封筒形式。ベスト+ローカルランキングTOP10。
+ * セーブ: localStorageに {v, data} の封筒形式。
+ * ベスト+ローカルランキングTOP10+オンライン用の匿名ID/名前。
  */
 const KEY = "climb30.save.v1";
 const TOP_N = 10;
@@ -13,9 +14,21 @@ export interface SaveData {
   best: number;
   ranking: RankEntry[];
   playCount: number;
+  /** オンラインランキング用の匿名ID(端末生成) */
+  playerId: string;
+  playerName: string;
+  /** ベスト送信が未達(オフライン等)なら次回再送 */
+  pendingSync: boolean;
 }
 
-const DEFAULTS: SaveData = { best: 0, ranking: [], playCount: 0 };
+const DEFAULTS: SaveData = {
+  best: 0,
+  ranking: [],
+  playCount: 0,
+  playerId: "",
+  playerName: "",
+  pendingSync: false,
+};
 
 export function loadSave(): SaveData {
   try {
@@ -37,6 +50,42 @@ function store(data: SaveData): void {
   } catch {
     // 保存不可環境では何もしない
   }
+}
+
+/** 初回起動時に匿名IDと名前を用意する(既にあればそのまま返す) */
+export function ensureIdentity(): SaveData {
+  const save = loadSave();
+  let changed = false;
+  if (!save.playerId) {
+    save.playerId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `p${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+    changed = true;
+  }
+  if (!save.playerName) {
+    save.playerName = `ノボラー${1000 + Math.floor(Math.random() * 9000)}`;
+    changed = true;
+  }
+  if (changed) store(save);
+  return save;
+}
+
+export function setPlayerName(name: string): SaveData {
+  const save = loadSave();
+  const trimmed = name.trim().slice(0, 12);
+  if (trimmed.length > 0) {
+    save.playerName = trimmed;
+    save.pendingSync = true; // 名前変更もオンラインへ反映したい
+    store(save);
+  }
+  return save;
+}
+
+export function setPendingSync(v: boolean): void {
+  const save = loadSave();
+  save.pendingSync = v;
+  store(save);
 }
 
 export interface ScoreOutcome {

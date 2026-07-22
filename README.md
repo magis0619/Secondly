@@ -18,13 +18,45 @@
 ## 画面(4つ)
 
 ```
-ホーム(タイトル+ベスト+[あそぶ][ランキング])
+ホーム(タイトル+ベスト+プレイヤー名(タップで変更)+[あそぶ][ランキング])
 → ゲーム(3,2,1,GO! → 30秒 → TIME UP!)
 → リザルト(高度カウントアップ+ベスト更新+順位)
-⇄ ランキング(ローカルTOP10、直近スコアをハイライト)
+⇄ ランキング(🌏せかい=オンラインTOP50 / 📱じぶん=ローカルTOP10)
 ```
 
-- ランキングは端末内(localStorage `climb30.save.v1`)。iOS化後にGame Center接続の余地あり
+## 背景ゾーン(高度で変化)
+
+ゆうぐれ(0m〜、山と夕日) → よぞら(25m〜、月と星) → くものうえ(50m〜、流れる雲) → うちゅう(80m〜、惑星とオーロラ)。ゾーン到達でマイルストーン演出。足場の装飾も変わる(草→灯り→雲→クリスタル)。定義は `config.ts` の `ZONES`。
+
+## オンラインランキング(Firebase Firestore、無料)
+
+**未設定の間は自動的にオフライン(ローカルのみ)で動作**。有効化する手順:
+
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクト作成(Sparkプラン=無料。書込2万/日・読取5万/日で十分)
+2. 「Firestore Database」を作成(本番モード)→「ルール」に以下を貼る:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scores/{playerId} {
+      allow read: if true;
+      allow write: if request.resource.data.score is int
+                   && request.resource.data.score >= 0
+                   && request.resource.data.score <= 1000
+                   && request.resource.data.name is string
+                   && request.resource.data.name.size() <= 12;
+      allow delete: if false;
+    }
+  }
+}
+```
+
+3. プロジェクト設定 → 全般 から **プロジェクトID** と **ウェブAPIキー** をコピーし、`src/game/config.ts` の `ONLINE.projectId` / `ONLINE.apiKey` に貼る
+
+- 実装はFirestore REST直叩き(`src/game/online.ts`、SDK依存なし)。1プレイヤー=1ドキュメント(匿名ID)なので同一人物がランキングに並ばない
+- 自己ベスト更新時に自動送信。通信失敗時は次回ランキング画面で再送
+- プレイヤー名は初回に「ノボラー1234」形式で自動生成、ホームで変更可(12文字)
 
 ## 開発・実行
 

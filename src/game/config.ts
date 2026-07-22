@@ -49,3 +49,50 @@ export const LAYOUT = {
   /** プレイヤーを画面上からこの割合の位置に */
   ANCHOR: 0.62,
 } as const;
+
+/** 動きの質感 */
+export const MOTION = {
+  /** カメラの上方向への先読み(行) */
+  CAM_LOOKAHEAD: 0.7,
+  CAM_RATE: 10,
+  /** 着地時に足場が沈む量(unit)と戻る時間 */
+  PLAT_DIP: 5,
+  PLAT_DIP_TIME: 0.28,
+  /** 着地後のキャラのぼよん時間 */
+  LAND_SQUASH_TIME: 0.2,
+} as const;
+
+/** 高度ゾーン(背景の変化)。fromはそのゾーンが始まる高度 */
+export interface Zone {
+  from: number;
+  name: string;
+  skyTop: string;
+  skyBottom: string;
+  /** 足場に薄く乗せる色 */
+  tint: string;
+  deco: "dusk" | "night" | "clouds" | "space";
+}
+
+export const ZONES: Zone[] = [
+  { from: 0, name: "ゆうぐれ", skyTop: "#41295e", skyBottom: "#c8613c", tint: "#c8613c", deco: "dusk" },
+  { from: 25, name: "よぞら", skyTop: "#0c1430", skyBottom: "#233060", tint: "#38e1ff", deco: "night" },
+  { from: 50, name: "くものうえ", skyTop: "#241f4e", skyBottom: "#54418c", tint: "#b48cff", deco: "clouds" },
+  { from: 80, name: "うちゅう", skyTop: "#04050e", skyBottom: "#131a38", tint: "#ff4fa3", deco: "space" },
+];
+
+/** ゾーン境界の色ブレンド幅(m) */
+export const ZONE_BLEND = 8;
+
+/**
+ * オンラインランキング(Firebase Firestore REST)。
+ * projectId/apiKeyが空の間はオフラインモード(ローカルのみ)。
+ * 設定手順はREADME参照。Sparkプラン無料枠で動作する。
+ */
+export const ONLINE = {
+  projectId: "", // 例: "climb30-xxxxx"
+  apiKey: "", // FirebaseコンソールのウェブAPIキー
+  collection: "scores",
+  TOP_N: 50,
+  MAX_SCORE: 1000,
+  NAME_MAX: 12,
+};

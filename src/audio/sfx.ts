@@ -75,6 +75,12 @@ export function sfxTimeup(): void {
   notes.forEach((f, i) => tone(f, 0.22, { type: "triangle", gain: 0.15, delay: i * 0.09 }));
 }
 
+/** ゾーン到達(マイルストーン) */
+export function sfxZone(): void {
+  const notes = [659, 880, 1319];
+  notes.forEach((f, i) => tone(f, 0.2, { type: "triangle", gain: 0.15, delay: i * 0.07 }));
+}
+
 export function sfxBest(): void {
   const notes = [523, 659, 784, 1047];
   notes.forEach((f, i) => tone(f, 0.25, { type: "triangle", gain: 0.15, delay: i * 0.08 }));

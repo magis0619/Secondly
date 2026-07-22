@@ -10,6 +10,8 @@ export type TowerEvent =
   | { type: "go" }
   | { type: "hop"; h: number; side: Side }
   | { type: "fall"; from: number; to: number; side: Side }
+  | { type: "landed"; h: number } // ホップ着地(足場の沈み・ぼよん演出用)
+  | { type: "fellLanded"; h: number; dist: number } // 落下の着地
   | { type: "tick"; left: number } // 残りURGENT秒のカウント
   | { type: "timeup"; score: number };
 
@@ -87,10 +89,17 @@ export class Tower {
   }
 
   update(dt: number): void {
-    // アニメ進行
+    // アニメ進行(完了時に着地イベント)
     if (this.anim.kind !== "idle") {
       this.anim.t += dt;
-      if (this.anim.t >= this.anim.dur) this.anim = { kind: "idle" };
+      if (this.anim.t >= this.anim.dur) {
+        if (this.anim.kind === "hop") {
+          this.events.push({ type: "landed", h: this.h });
+        } else {
+          this.events.push({ type: "fellLanded", h: this.h, dist: this.anim.from - this.h });
+        }
+        this.anim = { kind: "idle" };
+      }
     }
 
     if (this.phase === "count") {
