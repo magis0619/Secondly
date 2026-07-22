@@ -75,9 +75,9 @@ export interface Zone {
 
 export const ZONES: Zone[] = [
   { from: 0, name: "ゆうぐれ", skyTop: "#41295e", skyBottom: "#c8613c", tint: "#c8613c", deco: "dusk" },
-  { from: 25, name: "よぞら", skyTop: "#0c1430", skyBottom: "#233060", tint: "#38e1ff", deco: "night" },
-  { from: 50, name: "くものうえ", skyTop: "#241f4e", skyBottom: "#54418c", tint: "#b48cff", deco: "clouds" },
-  { from: 80, name: "うちゅう", skyTop: "#04050e", skyBottom: "#131a38", tint: "#ff4fa3", deco: "space" },
+  { from: 25, name: "よぞら", skyTop: "#141d3e", skyBottom: "#233060", tint: "#38e1ff", deco: "night" },
+  { from: 50, name: "くものうえ", skyTop: "#2b2558", skyBottom: "#54418c", tint: "#b48cff", deco: "clouds" },
+  { from: 80, name: "うちゅう", skyTop: "#0a0f24", skyBottom: "#131a38", tint: "#ff4fa3", deco: "space" },
 ];
 
 /** ゾーン境界の色ブレンド幅(m) */

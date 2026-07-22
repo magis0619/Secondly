@@ -240,6 +240,15 @@ export class GameScene implements Scene {
 
   // ==================== 描画 ====================
 
+  /**
+   * 高度altにある遠景要素の画面Y。factor<1で遠くに見える。
+   * 登るほど(camHが増えるほど)値が増える=要素は下へ流れ去る(標高表現)。
+   */
+  private py(alt: number, factor: number): number {
+    const { vp } = this.app;
+    return vp.h * LAYOUT.ANCHOR + (this.camH - alt) * LAYOUT.STEP_H * vp.unit * factor;
+  }
+
   private drawBackground(ctx: CanvasRenderingContext2D): void {
     const { vp } = this.app;
     const { w, h: H, unit: u } = vp;
@@ -251,8 +260,9 @@ export class GameScene implements Scene {
     ctx.fillRect(0, 0, w, H);
 
     const scroll = this.camH * LAYOUT.STEP_H * u;
+    const onScreen = (y: number, m = 80 * u) => y > -m && y < H + m;
 
-    // 星(高度が上がるほど濃く)
+    // 星(空のドームとしてループ。高度が上がるほど濃く)
     const starAlpha = clamp((this.camH - 12) / 30, 0, 0.9);
     if (starAlpha > 0) {
       ctx.fillStyle = "#ffffff";
@@ -266,76 +276,87 @@ export class GameScene implements Scene {
       ctx.globalAlpha = 1;
     }
 
-    // ゆうぐれ: 山のシルエット(低高度のみ)
-    const duskAlpha = clamp(1 - this.camH / 32, 0, 1);
-    if (duskAlpha > 0) {
-      ctx.fillStyle = css(mix(hexRgb("#1c1230"), hexRgb("#2a1a40"), 0.5), duskAlpha * 0.9);
-      const baseY = H * 0.8 + scroll * 0.35;
-      ctx.beginPath();
-      ctx.moveTo(0, H + 50);
-      for (let x = 0; x <= w; x += w / 8) {
-        ctx.lineTo(x, baseY - (30 + 70 * hash(Math.floor(x / (w / 8)))) * u);
+    // --- 以下は全て「高度アンカー」: 登ると画面の下へ流れ去っていく ---
+
+    // ゆうぐれ: 沈む太陽(高度4m)と山のシルエット(高度0m)
+    {
+      const sunY = this.py(4, 0.3);
+      if (onScreen(sunY)) {
+        ctx.fillStyle = css(hexRgb("#ffb03c"), 0.85);
+        ctx.beginPath();
+        ctx.arc(w * 0.72, sunY, 26 * u, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = css(hexRgb("#ffdca0"), 0.25);
+        ctx.beginPath();
+        ctx.arc(w * 0.72, sunY, 44 * u, 0, TAU);
+        ctx.fill();
       }
-      ctx.lineTo(w, H + 50);
-      ctx.fill();
-      // 太陽(沈みかけ)
-      ctx.fillStyle = css(hexRgb("#ffb03c"), duskAlpha * 0.8);
-      ctx.beginPath();
-      ctx.arc(w * 0.72, H * 0.62 + scroll * 0.3, 26 * u, 0, TAU);
-      ctx.fill();
-    }
-
-    // よぞら: 月
-    const nightAlpha = clamp((this.camH - 18) / 12, 0, 1) * clamp(1 - (this.camH - 60) / 20, 0, 1);
-    if (nightAlpha > 0) {
-      const mx = w * 0.22;
-      const my = H * 0.2 + (scroll * 0.06) % (H * 0.2);
-      ctx.fillStyle = css(hexRgb("#f4ecd0"), nightAlpha * 0.95);
-      ctx.beginPath();
-      ctx.arc(mx, my, 22 * u, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = css(skyColors(this.camH).top, nightAlpha);
-      ctx.beginPath();
-      ctx.arc(mx + 9 * u, my - 5 * u, 18 * u, 0, TAU);
-      ctx.fill();
-    }
-
-    // くものうえ: 流れる雲
-    const cloudAlpha = clamp((this.camH - 42) / 12, 0, 1) * clamp(1 - (this.camH - 92) / 18, 0, 1);
-    if (cloudAlpha > 0) {
-      ctx.fillStyle = css(hexRgb("#cbd4ff"), cloudAlpha * 0.16);
-      for (let i = 0; i < 5; i++) {
-        const cy = ((i * 191 + scroll * (0.3 + (i % 3) * 0.15)) % (H + 120)) - 60;
-        const cx = ((i * 137 + this.t * (8 + i * 3) * u) % (w + 200)) - 100;
-        for (const [ox, oy, r] of [[0, 0, 30], [26, -8, 22], [-26, -4, 20], [10, 8, 24]] as const) {
-          ctx.beginPath();
-          ctx.arc(cx + ox * u, cy + oy * u, r * u, 0, TAU);
-          ctx.fill();
+      const baseY = this.py(0, 0.35) + H * 0.18;
+      if (baseY > -60) {
+        ctx.fillStyle = css(mix(hexRgb("#1c1230"), hexRgb("#2a1a40"), 0.5), 0.9);
+        ctx.beginPath();
+        ctx.moveTo(0, H + 60);
+        for (let x = 0; x <= w; x += w / 8) {
+          ctx.lineTo(x, baseY - (30 + 70 * hash(Math.floor(x / (w / 8)))) * u);
         }
+        ctx.lineTo(w, H + 60);
+        ctx.fill();
       }
     }
 
-    // うちゅう: 惑星+オーロラ帯
-    const spaceAlpha = clamp((this.camH - 72) / 14, 0, 1);
-    if (spaceAlpha > 0) {
-      const px = w * 0.78;
-      const py = H * 0.24 + (scroll * 0.04) % (H * 0.1);
-      ctx.fillStyle = css(hexRgb("#ff8a5c"), spaceAlpha * 0.9);
-      ctx.beginPath();
-      ctx.arc(px, py, 20 * u, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = css(hexRgb("#ffd166"), spaceAlpha * 0.8);
-      ctx.lineWidth = 3 * u;
-      ctx.beginPath();
-      ctx.ellipse(px, py, 32 * u, 9 * u, -0.35, 0, TAU);
-      ctx.stroke();
-      // オーロラ
+    // よぞら: 月(高度34m。近づくと上から現れ、登り切ると下へ抜ける)
+    {
+      const my = this.py(34, 0.25);
+      if (onScreen(my)) {
+        const mx = w * 0.22;
+        ctx.fillStyle = css(hexRgb("#f4ecd0"), 0.95);
+        ctx.beginPath();
+        ctx.arc(mx, my, 22 * u, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = css(sky.top, 1);
+        ctx.beginPath();
+        ctx.arc(mx + 9 * u, my - 5 * u, 18 * u, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    // くものうえ: 雲(高度48〜76mに配置+横ドリフト)
+    ctx.fillStyle = css(hexRgb("#cbd4ff"), 0.16);
+    for (let i = 0; i < 5; i++) {
+      const alt = 48 + i * 7;
+      const cy = this.py(alt, 0.5);
+      if (!onScreen(cy)) continue;
+      const cx = ((i * 137 + this.t * (8 + i * 3) * u) % (w + 200)) - 100;
+      for (const [ox, oy, r] of [[0, 0, 30], [26, -8, 22], [-26, -4, 20], [10, 8, 24]] as const) {
+        ctx.beginPath();
+        ctx.arc(cx + ox * u, cy + oy * u, r * u, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    // うちゅう: 惑星(高度92m)+オーロラ帯(高度86m〜)
+    {
+      const pyy = this.py(92, 0.2);
+      if (onScreen(pyy)) {
+        const px = w * 0.78;
+        ctx.fillStyle = css(hexRgb("#ff8a5c"), 0.9);
+        ctx.beginPath();
+        ctx.arc(px, pyy, 20 * u, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = css(hexRgb("#ffd166"), 0.8);
+        ctx.lineWidth = 3 * u;
+        ctx.beginPath();
+        ctx.ellipse(px, pyy, 32 * u, 9 * u, -0.35, 0, TAU);
+        ctx.stroke();
+      }
       for (let b = 0; b < 2; b++) {
-        ctx.strokeStyle = css(hexRgb(b === 0 ? "#38e1ff" : "#ff4fa3"), spaceAlpha * 0.12);
+        const ay = this.py(86 + b * 10, 0.3);
+        if (!onScreen(ay, 60 * u)) continue;
+        ctx.strokeStyle = css(hexRgb(b === 0 ? "#38e1ff" : "#ff4fa3"), 0.12);
         ctx.lineWidth = 22 * u;
         ctx.beginPath();
         for (let x = 0; x <= w; x += 12 * u) {
-          const yy = H * (0.3 + b * 0.12) + Math.sin(x * 0.01 + this.t * 0.8 + b * 2) * 24 * u + ((scroll * 0.1) % (40 * u));
+          const yy = ay + Math.sin(x * 0.01 + this.t * 0.8 + b * 2) * 24 * u;
           if (x === 0) ctx.moveTo(x, yy);
           else ctx.lineTo(x, yy);
         }
@@ -563,21 +584,24 @@ export class GameScene implements Scene {
       this.drawPlatform(ctx, hh, x, y);
     }
 
-    // 霧(2つ上より先は見えない)
-    const fogY = anchorY + (this.camH - (visTop + 0.6)) * stepH;
-    if (fogY > -10) {
+    // 霞バンド(2つ上より先の足場はそもそも描いていないので、薄いもやと???だけ。
+    // 以前はここが画面上端まで不透明ベタ塗りで「上が真っ黒」の原因だった)
+    const fogY = anchorY + (this.camH - (visTop + 0.55)) * stepH;
+    if (fogY > -90 * u) {
       const sky = skyColors(this.camH);
-      const fg = ctx.createLinearGradient(0, fogY - 70 * u, 0, fogY + 24 * u);
-      fg.addColorStop(0, css(sky.top));
+      const top = fogY - 80 * u;
+      const fg = ctx.createLinearGradient(0, top, 0, fogY + 14 * u);
+      fg.addColorStop(0, css(sky.top, 0));
+      fg.addColorStop(0.65, css(mix(sky.top, [255, 255, 255], 0.08), 0.5));
       fg.addColorStop(1, css(sky.top, 0));
       ctx.fillStyle = fg;
-      ctx.fillRect(0, 0, w, Math.max(fogY + 24 * u, 0));
+      ctx.fillRect(0, top, w, fogY + 14 * u - top);
       ctx.fillStyle = COLORS.textDim;
       ctx.globalAlpha = 0.5 + 0.3 * Math.sin(this.t * 3);
       ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("? ? ?", w / 2, Math.max(fogY - 26 * u, safeTop + 96 * u));
+      ctx.fillText("? ? ?", w / 2, Math.max(fogY - 30 * u, safeTop + 96 * u));
       ctx.globalAlpha = 1;
     }
 

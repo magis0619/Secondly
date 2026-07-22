@@ -1,43 +1,54 @@
 /**
  * 画面サイズ/DPR/セーフエリアの管理。
- * ゲーム座標は「文字盤中心が原点・短辺基準の相似形」:
- *   unit = min(w, h) / 400、文字盤半径 R = 170 * unit
- * 描画コンテキストは CSSピクセル座標(dprはsetTransformで吸収)。
+ * 縦持ちゲームなので、横長の画面(PC・タブレット横)では中央に縦フレームを
+ * 切り出してレターボックス表示する(vp.w=フレーム幅, offsetX=左帯の幅)。
+ * ゲーム座標は unit = min(vp.w, h) / 400 の相似形。
  */
 export interface Viewport {
-  w: number; // CSS px
+  /** ゲームフレームの幅(CSS px)。シーンはこれを画面幅として使う */
+  w: number;
   h: number;
+  /** 物理画面の幅 */
+  realW: number;
+  /** フレームの左端オフセット(レターボックスの帯幅) */
+  offsetX: number;
   dpr: number;
   unit: number;
-  R: number; // 文字盤半径(CSS px)
-  cx: number; // 文字盤中心
+  R: number;
+  cx: number;
   cy: number;
   safeTop: number;
   safeBottom: number;
 }
 
+/** これより横長ならフレームをクランプする(iPhone縦 ≒ 0.46〜0.56) */
+const MAX_ASPECT = 0.62;
+const FRAME_ASPECT = 0.56;
+
 export function createViewport(canvas: HTMLCanvasElement): Viewport {
   const vp: Viewport = {
-    w: 0, h: 0, dpr: 1, unit: 1, R: 100, cx: 0, cy: 0, safeTop: 0, safeBottom: 0,
+    w: 0, h: 0, realW: 0, offsetX: 0, dpr: 1, unit: 1, R: 100, cx: 0, cy: 0, safeTop: 0, safeBottom: 0,
   };
 
   const resize = () => {
-    const w = window.innerWidth;
+    const rw = window.innerWidth;
     const h = window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    canvas.width = Math.round(w * dpr);
+    canvas.width = Math.round(rw * dpr);
     canvas.height = Math.round(h * dpr);
     const cs = getComputedStyle(document.documentElement);
     vp.safeTop = parseFloat(cs.getPropertyValue("--sat")) || 0;
     vp.safeBottom = parseFloat(cs.getPropertyValue("--sab")) || 0;
-    vp.w = w;
+    const frameW = rw / h > MAX_ASPECT ? Math.round(h * FRAME_ASPECT) : rw;
+    vp.realW = rw;
+    vp.w = frameW;
+    vp.offsetX = Math.round((rw - frameW) / 2);
     vp.h = h;
     vp.dpr = dpr;
-    vp.unit = Math.min(w, h) / 400;
+    vp.unit = Math.min(frameW, h) / 400;
     vp.R = 170 * vp.unit;
-    vp.cx = w / 2;
-    // 縦持ちでは中心をわずかに上へ(下部HUD/親指の余白)。横長環境では中央。
-    vp.cy = h > w ? h * 0.47 : h / 2;
+    vp.cx = frameW / 2;
+    vp.cy = h > frameW ? h * 0.47 : h / 2;
   };
 
   resize();
