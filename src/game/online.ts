@@ -4,6 +4,7 @@
  * 1プレイヤー=1ドキュメント(docId=playerId)なので、世界ランキングに同一人物は並ばない。
  */
 import { ONLINE } from "./config.ts";
+import { loadSave, markSynced } from "./save.ts";
 
 export interface WorldEntry {
   id: string;
@@ -52,6 +53,22 @@ export async function submitScore(playerId: string, name: string, score: number)
   } catch {
     return false;
   }
+}
+
+export type SyncResult = "sent" | "failed" | "none";
+
+/**
+ * ほんばん自己ベストに未送信分があれば世界へ送る。
+ * 判定は rankedBest > lastSynced(送信成功時に更新)。名前変更でlastSyncedは0に戻るため、
+ * 新しい名前でも自動的に再送される。モード分離前の旧セーブもlastSynced=0で始まるので、
+ * ランキング画面を開くだけで過去のベストが送信される。
+ */
+export async function syncBest(): Promise<SyncResult> {
+  const save = loadSave();
+  if (!onlineEnabled() || save.rankedBest <= 0 || save.rankedBest <= save.lastSynced) return "none";
+  const ok = await submitScore(save.playerId, save.playerName, save.rankedBest);
+  if (ok) markSynced(save.rankedBest);
+  return ok ? "sent" : "failed";
 }
 
 /** 世界ランキング上位を取得。無効/失敗はnull */

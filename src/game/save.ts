@@ -1,6 +1,6 @@
 /**
  * セーブ: localStorageに {v, data} の封筒形式。
- * ベスト+ローカルランキングTOP10+オンライン用の匿名ID/名前。
+ * ベスト+ローカルランキングTOP10+オンライン用の匿名ID/名前+課金フラグ。
  */
 const KEY = "climb30.save.v1";
 const TOP_N = 10;
@@ -11,23 +11,33 @@ export interface RankEntry {
 }
 
 export interface SaveData {
+  /** 全モード通算の自己ベスト(表示用) */
   best: number;
+  /** ほんばん(ランクド)の自己ベスト。世界ランキングへはこれだけを送る */
+  rankedBest: number;
+  /** 世界へ送信済みのスコア。rankedBest > lastSynced なら未送信分あり(名前変更で0に戻して再送) */
+  lastSynced: number;
   ranking: RankEntry[];
   playCount: number;
   /** オンラインランキング用の匿名ID(端末生成) */
   playerId: string;
   playerName: string;
-  /** ベスト送信が未達(オフライン等)なら次回再送 */
-  pendingSync: boolean;
+  /** 広告除去を購入済み */
+  adFree: boolean;
+  /** 開発者支援の累計回数 */
+  supporter: number;
 }
 
 const DEFAULTS: SaveData = {
   best: 0,
+  rankedBest: 0,
+  lastSynced: 0,
   ranking: [],
   playCount: 0,
   playerId: "",
   playerName: "",
-  pendingSync: false,
+  adFree: false,
+  supporter: 0,
 };
 
 export function loadSave(): SaveData {
@@ -38,7 +48,13 @@ export function loadSave(): SaveData {
     if (env.v !== 1 || typeof env.data !== "object" || env.data === null) {
       return structuredClone(DEFAULTS);
     }
-    return { ...structuredClone(DEFAULTS), ...env.data };
+    const save: SaveData = { ...structuredClone(DEFAULTS), ...env.data };
+    // モード分離前の旧セーブ: 当時のベストは「ほんばん」扱いで引き継ぐ。
+    // lastSyncedは0のままなので、次にランキングを開いた時に自動で世界へ送信される。
+    if (!("rankedBest" in env.data) && save.best > 0) {
+      save.rankedBest = save.best;
+    }
+    return save;
   } catch {
     return structuredClone(DEFAULTS);
   }
@@ -76,16 +92,31 @@ export function setPlayerName(name: string): SaveData {
   const trimmed = name.trim().slice(0, 12);
   if (trimmed.length > 0) {
     save.playerName = trimmed;
-    save.pendingSync = true; // 名前変更もオンラインへ反映したい
+    save.lastSynced = 0; // 新しい名前で世界ランキングへ再送信させる
     store(save);
   }
   return save;
 }
 
-export function setPendingSync(v: boolean): void {
+/** 世界への送信が成功したスコアを記録する */
+export function markSynced(score: number): void {
   const save = loadSave();
-  save.pendingSync = v;
+  save.lastSynced = Math.max(save.lastSynced, score);
   store(save);
+}
+
+export function setAdFree(): SaveData {
+  const save = loadSave();
+  save.adFree = true;
+  store(save);
+  return save;
+}
+
+export function addSupport(): SaveData {
+  const save = loadSave();
+  save.supporter += 1;
+  store(save);
+  return save;
 }
 
 export interface ScoreOutcome {
@@ -95,10 +126,11 @@ export interface ScoreOutcome {
   newBest: boolean;
 }
 
-export function addScore(score: number): ScoreOutcome {
+export function addScore(score: number, ranked: boolean): ScoreOutcome {
   const save = loadSave();
   const newBest = score > save.best;
   if (newBest) save.best = score;
+  if (ranked && score > save.rankedBest) save.rankedBest = score;
   save.playCount += 1;
   save.ranking.push({ score, date: new Date().toISOString() });
   save.ranking.sort((a, b) => b.score - a.score);

@@ -3,9 +3,9 @@ import type { Scene } from "../core/scene.ts";
 import { sfxStart } from "../audio/sfx.ts";
 import { COLORS } from "../game/config.ts";
 import type { WorldEntry } from "../game/online.ts";
-import { fetchTop, onlineEnabled, submitScore } from "../game/online.ts";
+import { fetchTop, onlineEnabled, syncBest } from "../game/online.ts";
 import type { SaveData } from "../game/save.ts";
-import { ensureIdentity, setPendingSync } from "../game/save.ts";
+import { ensureIdentity } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
 import { HomeScene } from "./home.ts";
@@ -37,13 +37,8 @@ export class RankingScene implements Scene {
 
   private loadWorld(): void {
     this.worldState = "loading";
-    // 未送信のベストがあれば先に再送してから取得
-    const pre = this.save.pendingSync && this.save.best > 0
-      ? submitScore(this.save.playerId, this.save.playerName, this.save.best).then((ok) => {
-          if (ok) setPendingSync(false);
-        })
-      : Promise.resolve();
-    void pre
+    // 未送信のほんばんベストがあれば先に送信してから取得(旧セーブもここで自動送信される)
+    void syncBest()
       .then(() => fetchTop())
       .then((list) => {
         if (list === null) {
@@ -75,8 +70,8 @@ export class RankingScene implements Scene {
     // タブ
     this.tabRects = [];
     const tabs: { tab: Tab; label: string }[] = [
-      { tab: "world", label: "🌏 せかい" },
-      { tab: "local", label: "📱 じぶん" },
+      { tab: "world", label: "🌏 ほんばん" },
+      { tab: "local", label: "📱 れんしゅう" },
     ];
     tabs.forEach((tb, i) => {
       const rect: Rect = { x: w / 2 - 150 * u + i * 155 * u, y: safeTop + 58 * u, w: 145 * u, h: 38 * u };

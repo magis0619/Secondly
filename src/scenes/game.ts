@@ -7,12 +7,15 @@ import {
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
 import { COLORS, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND } from "../game/config.ts";
-import { addScore, ensureIdentity, setPendingSync } from "../game/save.ts";
-import { onlineEnabled, submitScore } from "../game/online.ts";
+import { addScore, ensureIdentity } from "../game/save.ts";
+import { onlineEnabled, syncBest } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
 import { drawFx } from "../render/fx.ts";
+import type { SyncStatus } from "./result.ts";
 import { ResultScene } from "./result.ts";
+
+export type GameMode = "practice" | "ranked";
 
 type Rgb = [number, number, number];
 function hexRgb(hex: string): Rgb {
@@ -76,7 +79,10 @@ export class GameScene implements Scene {
   private lastZone = 0;
   private banner: { text: string; t: number } | null = null;
 
-  constructor(private app: App) {}
+  constructor(
+    private app: App,
+    private mode: GameMode = "practice",
+  ) {}
 
   enter(): void {
     this.best = ensureIdentity().best;
@@ -195,15 +201,15 @@ export class GameScene implements Scene {
       if (this.endT >= GAME.END_DELAY && !this.finished) {
         this.finished = true;
         const score = this.tower.maxH;
-        const outcome = addScore(score);
-        // オンライン送信(自己ベスト時のみ。失敗しても無視して次回再送)
-        if (onlineEnabled() && (outcome.newBest || outcome.save.pendingSync)) {
-          setPendingSync(true);
-          void submitScore(outcome.save.playerId, outcome.save.playerName, outcome.save.best).then(
-            (ok) => {
-              if (ok) setPendingSync(false);
-            },
-          );
+        const outcome = addScore(score, this.mode === "ranked");
+        // ほんばんのみ世界へ送信。判定はsyncBest(rankedBest > lastSynced)。
+        // 失敗しても次回のほんばん終了時かランキング画面で自動再送される。
+        const sync: SyncStatus = { state: "none" };
+        if (this.mode === "ranked" && onlineEnabled()) {
+          sync.state = "sending";
+          void syncBest().then((r) => {
+            sync.state = r === "sent" ? "ok" : r === "failed" ? "fail" : "none";
+          });
         }
         this.app.manager.switchTo(
           new ResultScene(this.app, {
@@ -211,6 +217,8 @@ export class GameScene implements Scene {
             rank: outcome.rank,
             newBest: outcome.newBest,
             best: outcome.save.best,
+            mode: this.mode,
+            sync,
           }),
         );
       }
@@ -584,20 +592,12 @@ export class GameScene implements Scene {
       this.drawPlatform(ctx, hh, x, y);
     }
 
-    // 霞バンド(2つ上より先の足場はそもそも描いていないので、薄いもやと???だけ。
-    // 以前はここが画面上端まで不透明ベタ塗りで「上が真っ黒」の原因だった)
+    // 2つ上より先は見えない。合図はゆっくり明滅する「???」だけ
+    // (以前あった霞バンドは横方向の灰色の線に見えるため廃止)
     const fogY = anchorY + (this.camH - (visTop + 0.55)) * stepH;
-    if (fogY > -90 * u) {
-      const sky = skyColors(this.camH);
-      const top = fogY - 80 * u;
-      const fg = ctx.createLinearGradient(0, top, 0, fogY + 14 * u);
-      fg.addColorStop(0, css(sky.top, 0));
-      fg.addColorStop(0.65, css(mix(sky.top, [255, 255, 255], 0.08), 0.5));
-      fg.addColorStop(1, css(sky.top, 0));
-      ctx.fillStyle = fg;
-      ctx.fillRect(0, top, w, fogY + 14 * u - top);
+    if (fogY > -40 * u) {
       ctx.fillStyle = COLORS.textDim;
-      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(this.t * 3);
+      ctx.globalAlpha = 0.3 + 0.18 * Math.sin(this.t * 1.6);
       ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
