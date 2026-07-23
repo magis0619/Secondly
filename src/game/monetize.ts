@@ -1,17 +1,14 @@
 /**
  * ★広告と課金の差し替えポイント(iOSネイティブと接続するのはこのファイルだけ)。
  *
- * Web/開発ビルドではスタブで動く:
- *  - 広告  … AD_STUB=true → AdGateScene がキャンバス内に擬似広告(5秒)を描く
- *  - 課金  … purchase() が confirm ダイアログで成功扱い(実際の請求なし)
+ * 広告  … AdMobインタースティシャル(showNativeAd)
+ * 課金  … RevenueCat経由のStoreKit(purchase/restorePurchases)
+ * Web/シミュレータではネイティブAPI呼び出しがcatchされ、広告は無音スキップ・課金は失敗扱いになる。
  *
- * iOS製品化のとき(README「広告と課金」参照):
- *  1. AD_STUB を false にして showNativeAd() を AdMob インタースティシャルに実装
- *  2. purchase() / restorePurchases() を StoreKit(または RevenueCat)に実装
- *  3. 価格表示はストアから取得した実価格に置き換える(PRODUCTSのpriceは仮)
+ * 価格表示はストアから取得した実価格に置き換えること(PRODUCTSのpriceは仮、docs/release-checklist.md参照)。
  */
 import { AdMob } from "@capacitor-community/admob";
-import { productLabel, t } from "./i18n.ts";
+import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 
 export type ProductId = "noads" | "tip_s" | "tip_m" | "tip_l";
 
@@ -61,14 +58,42 @@ export async function showNativeAd(): Promise<boolean> {
   }
 }
 
+const RC_API_KEY = "appl_vKMjiIFxJBdxygAWoSgiGvbESHK"; // RevenueCatのPublic APIキー(iOS)
+
+let rcInit = false;
+async function ensureRcInit(): Promise<void> {
+  if (rcInit) return;
+  rcInit = true;
+  await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
+  await Purchases.configure({ apiKey: RC_API_KEY });
+}
+
+function storeId(id: ProductId): string {
+  return `com.yamada.climb30.${id}`;
+}
+
 /** 購入。スタブはconfirmで成功扱い。iOS化でStoreKitに差し替え */
 export async function purchase(p: Product): Promise<boolean> {
-  return window.confirm(t("purchaseConfirm", { label: productLabel(p.id, p.label), price: p.price }));
+  try {
+    await ensureRcInit();
+    const { products } = await Purchases.getProducts({ productIdentifiers: [storeId(p.id)] });
+    if (products.length === 0) return false;
+    await Purchases.purchaseStoreProduct({ product: products[0] });
+    return true;
+  } catch {
+    return false; // キャンセル含む
+  }
 }
 
 /** 購入のリストア。スタブは空(セーブに残るため不要)。iOS化でStoreKitに差し替え */
 export async function restorePurchases(): Promise<ProductId[]> {
-  return [];
+  try {
+    await ensureRcInit();
+    const { customerInfo } = await Purchases.restorePurchases();
+    return customerInfo.entitlements.active["noads"] ? ["noads"] : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
