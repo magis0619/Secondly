@@ -26,9 +26,9 @@ export const GAME = {
   /** 同一サイドの連続の上限(極端な破滅の防止) */
   MAX_RUN: 7,
   /** ホップのアニメ時間 */
-  HOP_TIME: 0.13,
+  HOP_TIME: 0.10,
   /** ホップ中でもこの時刻以降なら次のタップを受け付ける(テンポ優先) */
-  HOP_BUFFER: 0.08,
+  HOP_BUFFER: 0.04,
   /** 落下: 基本+1段ごとの加算(上限) */
   FALL_BASE: 0.16,
   FALL_PER_STEP: 0.05,
@@ -91,7 +91,7 @@ export const ZONE_BLEND = 8;
 export const FEVER = {
   REQ: 20,
   TIME: 4,
-  HOP_TIME: 0.09,
+  HOP_TIME: 0.04,
 } as const;
 
 /** アプリバージョン(設定画面に表示) */
