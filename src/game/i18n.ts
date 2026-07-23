@@ -29,6 +29,12 @@ export function toggleLang(): Lang {
   return lang;
 }
 
+/** 特定の言語を指定して確定する(初回の言語ピッカー用。toggleと違い反転しない) */
+export function setLang(l: Lang): void {
+  lang = l;
+  setLangPref(l);
+}
+
 const JA = {
   tagline: "30びょうで どこまで のぼれる?",
   bestLabel: "ベスト",

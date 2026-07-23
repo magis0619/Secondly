@@ -6,13 +6,14 @@ import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { currentLang, t, toggleLang } from "../game/i18n.ts";
-import { ensureIdentity, getTickets } from "../game/save.ts";
+import { ensureIdentity, getTickets, loadSave } from "../game/save.ts";
 import { drawChara } from "../render/chara.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { startRanked } from "./adgate.ts";
 import { GameScene } from "./game.ts";
 import { HowToModal } from "./howto.ts";
+import { LanguagePickerModal } from "./langpick.ts";
 import { RankingScene } from "./ranking.ts";
 import { SettingsScene } from "./settings.ts";
 import { SkinsScene } from "./skins.ts";
@@ -42,26 +43,48 @@ export class HomeScene implements Scene {
   private gearRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private langRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private howto: HowToModal;
+  private langpick: LanguagePickerModal;
 
   constructor(private app: App) {
     this.howto = new HowToModal(app);
+    this.langpick = new LanguagePickerModal(app);
   }
 
-  enter(): void {
-    setBgm("menu");
-    const save = ensureIdentity(t("defaultNamePrefix"));
+  /** セーブ内容を描画用フィールドへ反映 */
+  private applySave(save: ReturnType<typeof loadSave>): void {
     this.best = save.best;
     this.name = save.playerName;
     this.adFree = save.adFree;
     this.supporter = save.supporter;
     this.skin = save.skin;
     this.chara = save.chara;
+  }
+
+  enter(): void {
+    setBgm("menu");
     this.tickets = getTickets(TICKETS.DAILY);
+
+    // 初回起動(言語未確定)は、まず言語ピッカーを出す。名前の初期生成は言語確定後に行い、
+    // 英語を選んだのに和名プレフィクスが付く…といったズレを防ぐ。あそびかたも言語確定後に出す。
+    if (loadSave().lang === "") {
+      this.applySave(loadSave()); // 背後描画用(まだ名前は空。モーダルで隠れる)
+      this.langpick.onSelect = () => {
+        const save = ensureIdentity(t("defaultNamePrefix"));
+        this.applySave(save);
+        if (!save.seenHowto) this.howto.show();
+      };
+      this.langpick.show();
+      return;
+    }
+
+    const save = ensureIdentity(t("defaultNamePrefix"));
+    this.applySave(save);
     if (!save.seenHowto) this.howto.show(); // 初回起動時だけ自動で開く
   }
 
   update(dt: number): void {
     this.t += dt;
+    this.langpick.update(dt);
     this.howto.update(dt);
   }
 
@@ -333,9 +356,11 @@ export class HomeScene implements Scene {
     drawButton(ctx, u, this.storeRect, t("storeBtn"), { bg: "#f5a03c", fg: "#4a2c00", fontPx: 12.5 * u });
     ctx.restore();
     this.howto.draw(ctx);
+    this.langpick.draw(ctx); // 最前面(あそびかたより手前)
   }
 
   onUp(x: number, y: number): void {
+    if (this.langpick.onUp(x, y)) return; // 言語ピッカーが最優先でタップ吸収
     if (this.howto.onUp(x, y)) return;
     if (inRect(this.practiceRect, x, y)) {
       sfxStart();
