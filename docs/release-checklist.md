@@ -153,7 +153,29 @@ export async function showNativeAd(): Promise<boolean> {
 | `<bundleId>.tip_m` | **消耗型** | ¥500段階 | おうえん(中) |
 | `<bundleId>.tip_l` | **消耗型** | ¥1,200段階 | おうえん(大) |
 
-各商品に日本語の表示名と説明を入れ、審査用スクショ(ストア画面のスクショでよい)を添付。
+### 6-1-a. 表示名・説明のローカリゼーション(日本語+英語)
+
+本アプリはJA/EN両対応(ホーム左上の🌐で切替)のため、各商品ページで
+「+ ローカリゼーションを追加」から **日本語** と **英語(米国)** の2つを登録する。
+テキストはアプリ内表示(`src/game/monetize.ts` の `PRODUCTS`=日本語、
+`src/game/i18n.ts` の `PRODUCT_EN`=英語)とそのまま揃える:
+
+| 商品ID | ロケール | 表示名 | 説明 |
+|---|---|---|---|
+| `noads` | 日本語 | 🚫 こうこく じょきょ | ほんばん前の こうこくが なくなる(かいきり) |
+| `noads` | English (U.S.) | 🚫 Remove Ads | No more ads before Ranked (one-time) |
+| `tip_s` | 日本語 | ☕ おうえん(小) | かいはつしゃに コーヒーを おごる |
+| `tip_s` | English (U.S.) | ☕ Tip (S) | Buy the developer a coffee |
+| `tip_m` | 日本語 | 🍱 おうえん(中) | かいはつしゃに おべんとうを おごる |
+| `tip_m` | English (U.S.) | 🍱 Tip (M) | Buy the developer a lunch |
+| `tip_l` | 日本語 | 🎉 おうえん(大) | かいはつしゃが とても よろこぶ |
+| `tip_l` | English (U.S.) | 🎉 Tip (L) | Make the developer's day |
+
+表示名は30文字・説明は45文字がAppleの目安なので、上表はいずれも余裕で収まっている。
+**あとで文言を変える時は、`monetize.ts`(JA)と`i18n.ts`の`PRODUCT_EN`(EN)も同時に直し、
+アプリ内表示とストア掲載のズレを防ぐこと。**
+
+審査用スクショ(ストア画面のスクショでよい)も各商品に添付。
 
 ### 6-1-b. 各商品の審査メモ(Review Notes、コピペ用)
 
