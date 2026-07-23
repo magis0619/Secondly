@@ -2,10 +2,9 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
 import { COLORS } from "../game/config.ts";
-import { loadSave } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
-import { AdGateScene } from "./adgate.ts";
+import { startRanked } from "./adgate.ts";
 import type { GameMode } from "./game.ts";
 import { GameScene } from "./game.ts";
 import { HomeScene } from "./home.ts";
@@ -17,7 +16,10 @@ export interface SyncStatus {
 }
 
 export interface ResultParams {
+  /** 最終スコア(たかさ+フィーバーボーナス) */
   score: number;
+  height: number;
+  feverBonus: number;
   rank: number; // 1始まり。圏外は-1
   newBest: boolean;
   best: number;
@@ -75,6 +77,13 @@ export class ResultScene implements Scene {
     ctx.font = `900 ${64 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(`${Math.floor(p.score * ratio)}m`, w / 2, h * 0.28);
 
+    // フィーバーの内訳
+    if (p.feverBonus > 0 && ratio >= 1) {
+      ctx.fillStyle = COLORS.gold;
+      ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(`たかさ ${p.height}m + 🔥フィーバー ${p.feverBonus}m`, w / 2, h * 0.335);
+    }
+
     if (ratio >= 1) {
       if (p.newBest) {
         ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.t * 6);
@@ -121,13 +130,9 @@ export class ResultScene implements Scene {
       by += bh + 15 * u;
     };
     add("もういちど", () => {
-      // ほんばんの再挑戦も広告ゲートを通る(広告除去済みなら直行)
-      const next = ranked
-        ? loadSave().adFree
-          ? new GameScene(this.app, "ranked")
-          : new AdGateScene(this.app)
-        : new GameScene(this.app, "practice");
-      this.app.manager.switchTo(next);
+      // ほんばんはチケット消費(切れていれば補充画面へ)
+      if (ranked) startRanked(this.app);
+      else this.app.manager.switchTo(new GameScene(this.app, "practice"));
     }, COLORS.accent2);
     add("🏆 ランキング", () => this.app.manager.switchTo(new RankingScene(this.app, this.params.rank)), "#25314f", COLORS.text);
     add("ホームへ", () => this.app.manager.switchTo(new HomeScene(this.app)), "#25314f", COLORS.text);

@@ -2,6 +2,8 @@
  * セーブ: localStorageに {v, data} の封筒形式。
  * ベスト+ローカルランキングTOP10+オンライン用の匿名ID/名前+課金フラグ。
  */
+import type { Skin } from "./config.ts";
+
 const KEY = "climb30.save.v1";
 const TOP_N = 10;
 
@@ -22,10 +24,15 @@ export interface SaveData {
   /** オンラインランキング用の匿名ID(端末生成) */
   playerId: string;
   playerName: string;
-  /** 広告除去を購入済み */
+  /** 広告除去を購入済み(ほんばん無制限) */
   adFree: boolean;
   /** 開発者支援の累計回数 */
   supporter: number;
+  /** ほんばんチケットの残数と、その日付(YYYY-MM-DD。日付が変わるとDAILYにリセット) */
+  tickets: number;
+  ticketDate: string;
+  /** 選択中のきせかえID(config.SKINS) */
+  skin: string;
 }
 
 const DEFAULTS: SaveData = {
@@ -38,6 +45,9 @@ const DEFAULTS: SaveData = {
   playerName: "",
   adFree: false,
   supporter: 0,
+  tickets: 0,
+  ticketDate: "",
+  skin: "pink",
 };
 
 export function loadSave(): SaveData {
@@ -115,6 +125,60 @@ export function setAdFree(): SaveData {
 export function addSupport(): SaveData {
   const save = loadSave();
   save.supporter += 1;
+  store(save);
+  return save;
+}
+
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** きょうのほんばんチケット残数(日付が変わっていたらDAILYへリセットして返す) */
+export function getTickets(daily: number): number {
+  const save = loadSave();
+  if (save.ticketDate !== todayKey()) {
+    save.tickets = daily;
+    save.ticketDate = todayKey();
+    store(save);
+  }
+  return save.tickets;
+}
+
+/** チケットを1枚消費。残数を返す(0未満にはしない) */
+export function useTicket(): number {
+  const save = loadSave();
+  save.tickets = Math.max(0, save.tickets - 1);
+  save.ticketDate = todayKey();
+  store(save);
+  return save.tickets;
+}
+
+/** 広告視聴などでチケットを補充 */
+export function addTickets(n: number): number {
+  const save = loadSave();
+  save.tickets += n;
+  save.ticketDate = todayKey();
+  store(save);
+  return save.tickets;
+}
+
+export function isSkinUnlocked(skin: Skin, save: SaveData): boolean {
+  switch (skin.cond.type) {
+    case "free":
+      return true;
+    case "plays":
+      return save.playCount >= skin.cond.n;
+    case "best":
+      return save.best >= skin.cond.n;
+    case "support":
+      return save.supporter >= skin.cond.n;
+  }
+}
+
+export function setSkin(id: string): SaveData {
+  const save = loadSave();
+  save.skin = id;
   store(save);
   return save;
 }

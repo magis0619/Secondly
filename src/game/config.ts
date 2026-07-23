@@ -45,7 +45,7 @@ export const LAYOUT = {
   STEP_H: 84, // 1段の高さ
   PLAT_W: 108,
   PLAT_H: 16,
-  PLAYER_R: 15,
+  PLAYER_R: 18.5,
   /** プレイヤーを画面上からこの割合の位置に */
   ANCHOR: 0.62,
 } as const;
@@ -82,6 +82,45 @@ export const ZONES: Zone[] = [
 
 /** ゾーン境界の色ブレンド幅(m) */
 export const ZONE_BLEND = 8;
+
+/** フィーバーコンボ: ノーミスでREQ回登るとTIME秒間、1ホップごとにボーナス+BONUS m */
+export const FEVER = {
+  REQ: 12,
+  TIME: 5,
+  BONUS: 1,
+} as const;
+
+/** ほんばんのチケット: 1日DAILY回無料、広告1回でAD_REWARD回ぶん補充 */
+export const TICKETS = {
+  DAILY: 3,
+  AD_REWARD: 3,
+} as const;
+
+/** きせかえ(バンダナ)。condは自動判定なので解放状態の保存は不要 */
+export interface Skin {
+  id: string;
+  name: string;
+  /** バンダナ色。"rainbow"は特別扱い(時間で色相回転) */
+  color: string;
+  cond: { type: "free" | "plays" | "best" | "support"; n: number };
+  condText: string;
+}
+
+/** スキンIDからバンダナ色を得る(rainbowは時間tで色相回転) */
+export function skinColor(id: string, t: number): string {
+  const s = SKINS.find((k) => k.id === id) ?? SKINS[0];
+  return s.color === "rainbow" ? `hsl(${Math.floor((t * 90) % 360)}, 90%, 62%)` : s.color;
+}
+
+export const SKINS: Skin[] = [
+  { id: "pink", name: "ピンク", color: "#ff4fa3", cond: { type: "free", n: 0 }, condText: "さいしょから" },
+  { id: "sky", name: "みずいろ", color: "#38b6ff", cond: { type: "plays", n: 10 }, condText: "10かい あそぶ" },
+  { id: "green", name: "みどり", color: "#43d9a3", cond: { type: "plays", n: 30 }, condText: "30かい あそぶ" },
+  { id: "purple", name: "むらさき", color: "#9b6bf3", cond: { type: "plays", n: 50 }, condText: "50かい あそぶ" },
+  { id: "gold", name: "ゴールド", color: "#ffd166", cond: { type: "best", n: 50 }, condText: "ベスト50mいじょう" },
+  { id: "rainbow", name: "レインボー", color: "rainbow", cond: { type: "best", n: 80 }, condText: "うちゅうに とうたつ(80m)" },
+  { id: "star", name: "⭐しろ", color: "#f4f7ff", cond: { type: "support", n: 1 }, condText: "かいはつしゃを おうえん" },
+];
 
 /**
  * オンラインランキング(Firebase Firestore REST)。

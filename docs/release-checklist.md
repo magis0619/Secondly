@@ -55,7 +55,8 @@ Xcode で: Signing & Capabilities → 自分の Team を選択 / Deployment Info
 
 1. <https://admob.google.com/> でアカウント作成 → 「アプリを追加」(まだストア未公開なので「アプリストアに掲載していない」を選ぶ)
 2. **アプリID**(`ca-app-pub-xxxxxxxx~yyyyyyy`)を控える
-3. 広告ユニットを作成 → **インタースティシャル** → ユニットID(`ca-app-pub-xxxxxxxx/zzzzzzz`)を控える
+3. 広告ユニットを作成 → **リワード(推奨)またはインタースティシャル** → ユニットID(`ca-app-pub-xxxxxxxx/zzzzzzz`)を控える
+   - ゲーム内は「広告を見るとほんばん+3回」という**報酬型**の導線なので、リワード広告が意味的に正しい(`AdMob.prepareRewardVideoAd`/`showRewardVideoAd` を使う。視聴完了イベントで `true` を返すようにする)
 
 ### 5-2. プラグイン導入(Mac 上)
 

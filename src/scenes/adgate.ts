@@ -1,17 +1,35 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxGo, sfxStart } from "../audio/sfx.ts";
-import { COLORS } from "../game/config.ts";
+import { COLORS, TICKETS } from "../game/config.ts";
 import { AD_STUB, STUB_AD_SEC, showNativeAd } from "../game/monetize.ts";
+import { addTickets, getTickets, loadSave, useTicket } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
-import { drawButton, inRect } from "../render/ui.ts";
+import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { GameScene } from "./game.ts";
 import { HomeScene } from "./home.ts";
 import { StoreScene } from "./store.ts";
 
 /**
- * ほんばんの前の広告ゲート。
- * 確認画面(広告が流れることを明示)→ 擬似広告(AD_STUB時)→ ほんばん開始。
+ * ほんばん開始の共通フロー(ホーム/リザルトの両方から呼ぶ):
+ * 広告除去済み → 無制限で即開始 / チケットあり → 1枚消費して即開始 /
+ * チケット0 → 補充画面(AdGateScene)へ。
+ */
+export function startRanked(app: App): void {
+  if (loadSave().adFree) {
+    app.manager.switchTo(new GameScene(app, "ranked"));
+    return;
+  }
+  if (getTickets(TICKETS.DAILY) > 0) {
+    useTicket();
+    app.manager.switchTo(new GameScene(app, "ranked"));
+    return;
+  }
+  app.manager.switchTo(new AdGateScene(app));
+}
+
+/**
+ * チケット切れ時の補充画面。広告視聴で+3回ぶん補充し、そのまま1枚使って開始する。
  */
 export class AdGateScene implements Scene {
   private t = 0;
@@ -24,15 +42,20 @@ export class AdGateScene implements Scene {
 
   constructor(private app: App) {}
 
+  private grantAndStart(): void {
+    if (this.started) return;
+    this.started = true;
+    addTickets(TICKETS.AD_REWARD);
+    useTicket(); // このまま1回ぶん使って開始
+    sfxGo();
+    this.app.manager.switchTo(new GameScene(this.app, "ranked"));
+  }
+
   update(dt: number): void {
     this.t += dt;
     if (this.mode === "ad") {
       this.adLeft -= dt;
-      if (this.adLeft <= 0 && !this.started) {
-        this.started = true;
-        sfxGo();
-        this.app.manager.switchTo(new GameScene(this.app, "ranked"));
-      }
+      if (this.adLeft <= 0) this.grantAndStart();
     }
   }
 
@@ -47,28 +70,32 @@ export class AdGateScene implements Scene {
 
     if (this.mode === "confirm") {
       ctx.fillStyle = COLORS.accent2;
-      ctx.font = `900 ${30 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `900 ${30 * u}px ${FONT}`;
       ctx.shadowColor = COLORS.accent2;
       ctx.shadowBlur = 16 * u;
-      ctx.fillText("🌏 ほんばん", w / 2, h * 0.2);
+      ctx.fillText("🌏 ほんばん", w / 2, h * 0.18);
       ctx.shadowBlur = 0;
 
+      // チケット切れの表示
       ctx.fillStyle = COLORS.text;
-      ctx.font = `700 ${15 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText("せかいランキングに ちょうせん!", w / 2, h * 0.29);
+      ctx.font = `800 ${16 * u}px ${FONT}`;
+      ctx.fillText("きょうの むりょうぶんは つかいきった!", w / 2, h * 0.28);
       ctx.fillStyle = COLORS.textDim;
-      ctx.font = `700 ${13 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText("プレイの まえに こうこくが ながれます", w / 2, h * 0.35);
+      ctx.font = `700 ${13 * u}px ${FONT}`;
+      ctx.fillText(`こうこくを 見ると +${TICKETS.AD_REWARD}かい あそべます`, w / 2, h * 0.335);
+      // チケットアイコン(からっぽ)
+      ctx.font = `800 ${13 * u}px ${FONT}`;
+      ctx.fillText("🎟 のこり 0 かい", w / 2, h * 0.39);
 
       const bw = 250 * u;
       this.watchRect = { x: w / 2 - bw / 2, y: h * 0.46, w: bw, h: 56 * u };
       this.storeRect = { x: w / 2 - bw / 2, y: h * 0.46 + 72 * u, w: bw, h: 48 * u };
       this.backRect = { x: w / 2 - bw / 2, y: h * 0.46 + 134 * u, w: bw, h: 48 * u };
-      drawButton(ctx, u, this.watchRect, "▶ こうこくを 見て スタート", { bg: COLORS.accent2, fontPx: 16 * u });
-      drawButton(ctx, u, this.storeRect, "🛒 こうこくを なくす(ストア)", { bg: "#25314f", fg: COLORS.text, fontPx: 13 * u });
+      drawButton(ctx, u, this.watchRect, `▶ こうこくを 見て +${TICKETS.AD_REWARD}かい`, { bg: COLORS.accent2, fg: "#fff", fontPx: 15 * u });
+      drawButton(ctx, u, this.storeRect, "🛒 こうこくじょきょ(むせいげん)", { bg: "#25314f", fg: COLORS.text, fontPx: 12.5 * u });
       drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text, fontPx: 14 * u });
     } else {
-      // 擬似広告(iOSではここがAdMobに置き換わる)
+      // 擬似広告(iOSではここがAdMobリワード広告に置き換わる)
       ctx.fillStyle = "#10131f";
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = "#2a3350";
@@ -76,16 +103,15 @@ export class AdGateScene implements Scene {
       ctx.roundRect(w / 2 - 130 * u, h * 0.3 - 90 * u, 260 * u, 180 * u, 14 * u);
       ctx.fill();
       ctx.fillStyle = COLORS.textDim;
-      ctx.font = `900 ${58 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `900 ${58 * u}px ${FONT}`;
       ctx.globalAlpha = 0.75 + 0.25 * Math.sin(this.t * 2.4);
       ctx.fillText("AD", w / 2, h * 0.3);
       ctx.globalAlpha = 1;
 
       const left = Math.max(this.adLeft, 0);
       ctx.fillStyle = COLORS.text;
-      ctx.font = `800 ${17 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `800 ${17 * u}px ${FONT}`;
       ctx.fillText(`あと ${Math.ceil(left)} びょう`, w / 2, h * 0.48);
-      // 残り時間バー
       const bw = 220 * u;
       ctx.fillStyle = "#25314f";
       ctx.beginPath();
@@ -97,7 +123,7 @@ export class AdGateScene implements Scene {
       ctx.fill();
 
       ctx.fillStyle = COLORS.textDim;
-      ctx.font = `700 ${11 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `700 ${11 * u}px ${FONT}`;
       ctx.fillText("開発ビルドのため 擬似広告を表示しています", w / 2, h * 0.62);
       ctx.fillText("(iOS版では ここに実際の広告が入ります)", w / 2, h * 0.62 + 18 * u);
     }
@@ -113,10 +139,7 @@ export class AdGateScene implements Scene {
         this.adLeft = STUB_AD_SEC;
       } else {
         void showNativeAd().then((ok) => {
-          if (ok && !this.started) {
-            this.started = true;
-            this.app.manager.switchTo(new GameScene(this.app, "ranked"));
-          }
+          if (ok) this.grantAndStart();
         });
       }
     } else if (inRect(this.storeRect, x, y)) {

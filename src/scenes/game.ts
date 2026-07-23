@@ -6,7 +6,7 @@ import {
 } from "../audio/sfx.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
-import { COLORS, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND } from "../game/config.ts";
+import { COLORS, FEVER, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND, skinColor } from "../game/config.ts";
 import { addScore, ensureIdentity } from "../game/save.ts";
 import { onlineEnabled, syncBest } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
@@ -78,6 +78,12 @@ export class GameScene implements Scene {
   private landSquashT = 1;
   private lastZone = 0;
   private banner: { text: string; t: number } | null = null;
+  /** フィーバー: ノーミス連続ホップ数 / 残り時間 / 累計ボーナスm */
+  private combo = 0;
+  private feverT = 0;
+  private feverBonus = 0;
+  private skin = "pink";
+  private trailAcc = 0;
 
   constructor(
     private app: App,
@@ -85,7 +91,9 @@ export class GameScene implements Scene {
   ) {}
 
   enter(): void {
-    this.best = ensureIdentity().best;
+    const save = ensureIdentity();
+    this.best = save.best;
+    this.skin = save.skin;
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__climb = {
         tower: this.tower,
@@ -106,6 +114,9 @@ export class GameScene implements Scene {
           maxH: this.tower.maxH,
           timeLeft: this.tower.timeLeft,
           nextSide: this.tower.side(this.tower.h + 1),
+          combo: this.combo,
+          fever: this.feverT > 0,
+          feverBonus: this.feverBonus,
         }),
       };
     }
@@ -134,6 +145,22 @@ export class GameScene implements Scene {
     this.tower.update(dt);
     this.fx.update(dt);
 
+    // フィーバー残り時間
+    if (this.feverT > 0) this.feverT = Math.max(this.feverT - dt, 0);
+
+    // ホップ中のトレイル(残像パーティクル)
+    if (this.tower.anim.kind === "hop") {
+      this.trailAcc += dt;
+      if (this.trailAcc >= 0.025) {
+        this.trailAcc = 0;
+        const u = vp.unit;
+        const tx = vp.w / 2 + this.tower.visualSide() * LAYOUT.COL_OFFSET * u;
+        const ty = vp.h * LAYOUT.ANCHOR + (this.camH - this.tower.visualH()) * LAYOUT.STEP_H * u - LAYOUT.PLAYER_R * u;
+        const col = this.feverT > 0 ? `hsl(${Math.floor((this.t * 400) % 360)}, 90%, 65%)` : "rgba(200,220,255,0.7)";
+        this.fx.burst(tx, ty, col, 1, 14 * u, 2.6 * u);
+      }
+    }
+
     for (const ev of this.tower.drainEvents()) {
       const u = vp.unit;
       switch (ev.type) {
@@ -147,7 +174,23 @@ export class GameScene implements Scene {
         case "hop": {
           sfxHop(ev.h);
           const [x, y] = this.platPos(ev.h - 1);
-          this.fx.burst(x, y, "#c9d6ff", 5, 90 * u, 3 * u);
+          // 踏み切り: 砂ぼこり+リング
+          this.fx.burst(x, y, "#c9d6ff", 7, 100 * u, 3 * u);
+          this.fx.ring(x, y, this.feverT > 0 ? COLORS.gold : "rgba(255,255,255,0.8)", 26 * u, 2 * u, 0.28);
+          // フィーバーコンボ
+          this.combo++;
+          if (this.feverT > 0) {
+            this.feverBonus += FEVER.BONUS;
+            const [fx2, fy2] = this.platPos(ev.h);
+            this.fx.float(fx2, fy2 - 44 * u, `+${FEVER.BONUS}m`, COLORS.gold, 13 * u, 0.6);
+          } else if (this.combo >= FEVER.REQ) {
+            this.feverT = FEVER.TIME;
+            sfxZone();
+            this.banner = { text: "🔥 FEVER! 🔥", t: 1.4 };
+            this.juice.flashScreen(COLORS.gold, 0.22);
+            const [bx2, by2] = this.platPos(ev.h);
+            this.fx.burst(bx2, by2 - 30 * u, COLORS.gold, 22, 200 * u, 4 * u);
+          }
           // ゾーン到達マイルストーン
           const z = zoneAt(ev.h);
           if (z > this.lastZone) {
@@ -166,6 +209,10 @@ export class GameScene implements Scene {
         case "landed": {
           this.dips.set(ev.h, MOTION.PLAT_DIP_TIME);
           this.landSquashT = 0;
+          // 着地の砂ぼこり(左右へ)
+          const [lx, ly] = this.platPos(ev.h);
+          this.fx.burst(lx - 14 * u, ly - 2 * u, "rgba(230,236,255,0.7)", 3, 60 * u, 2.4 * u);
+          this.fx.burst(lx + 14 * u, ly - 2 * u, "rgba(230,236,255,0.7)", 3, 60 * u, 2.4 * u);
           break;
         }
         case "fellLanded": {
@@ -176,6 +223,8 @@ export class GameScene implements Scene {
           break;
         }
         case "fall": {
+          this.combo = 0;
+          this.feverT = 0; // ミスでフィーバー即終了
           const dist = ev.from + 1 - ev.to;
           sfxFall(dist);
           this.juice.shake(clamp(0.15 + dist * 0.06, 0.2, 0.6));
@@ -200,7 +249,7 @@ export class GameScene implements Scene {
       this.endT += dt;
       if (this.endT >= GAME.END_DELAY && !this.finished) {
         this.finished = true;
-        const score = this.tower.maxH;
+        const score = this.tower.maxH + this.feverBonus;
         const outcome = addScore(score, this.mode === "ranked");
         // ほんばんのみ世界へ送信。判定はsyncBest(rankedBest > lastSynced)。
         // 失敗しても次回のほんばん終了時かランキング画面で自動再送される。
@@ -214,6 +263,8 @@ export class GameScene implements Scene {
         this.app.manager.switchTo(
           new ResultScene(this.app, {
             score,
+            height: this.tower.maxH,
+            feverBonus: this.feverBonus,
             rank: outcome.rank,
             newBest: outcome.newBest,
             best: outcome.save.best,
@@ -504,7 +555,7 @@ export class GameScene implements Scene {
     // 腕
     ctx.strokeStyle = COLORS.player;
     ctx.lineCap = "round";
-    ctx.lineWidth = 4.5 * u;
+    ctx.lineWidth = 5.5 * u;
     for (const s of [-1, 1]) {
       ctx.beginPath();
       ctx.moveTo(s * r * 0.7, -r * 0.05);
@@ -512,7 +563,7 @@ export class GameScene implements Scene {
       ctx.stroke();
     }
     // 脚(ホップ中はたたむ)
-    ctx.lineWidth = 5 * u;
+    ctx.lineWidth = 6 * u;
     const legTuck = tw.anim.kind === "hop" ? Math.sin(Math.min(tw.anim.t / tw.anim.dur, 1) * Math.PI) : 0;
     for (const s of [-1, 1]) {
       ctx.beginPath();
@@ -521,17 +572,18 @@ export class GameScene implements Scene {
       ctx.stroke();
     }
 
-    // 体
+    // 体(フィーバー中は虹色のオーラ)
+    const fever = this.feverT > 0;
     ctx.fillStyle = COLORS.player;
-    ctx.shadowColor = COLORS.accent;
-    ctx.shadowBlur = 10 * u;
+    ctx.shadowColor = fever ? `hsl(${Math.floor((this.t * 400) % 360)}, 95%, 60%)` : COLORS.accent;
+    ctx.shadowBlur = (fever ? 20 : 10) * u;
     ctx.beginPath();
     ctx.roundRect(-r * 0.82, -r, r * 1.64, r * 2, r * 0.72);
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // バンダナ+なびくしっぽ
-    ctx.fillStyle = COLORS.accent2;
+    // バンダナ(きせかえ)+なびくしっぽ
+    ctx.fillStyle = skinColor(this.skin, this.t);
     ctx.fillRect(-r * 0.82, -r * 0.72, r * 1.64, r * 0.3);
     ctx.beginPath();
     const wob = Math.sin(this.t * 9) * 3 * u;
@@ -592,9 +644,24 @@ export class GameScene implements Scene {
       this.drawPlatform(ctx, hh, x, y);
     }
 
-    // 2つ上より先は見えない。合図はゆっくり明滅する「???」だけ
+    // 3つ上の足場はゴースト(薄いシルエット)でチラ見せ ※試験導入
+    {
+      const gh = visTop + 1;
+      const [gx, gy] = this.platPos(gh);
+      if (gy > -50 && gy < H + 60) {
+        const pw = LAYOUT.PLAT_W * u;
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = css(mix(hexRgb(COLORS.platformTop), [255, 255, 255], 0.3));
+        ctx.beginPath();
+        ctx.roundRect(gx - pw / 2, gy, pw, LAYOUT.PLAT_H * u, 7 * u);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // その先は見えない。合図はゆっくり明滅する「???」だけ
     // (以前あった霞バンドは横方向の灰色の線に見えるため廃止)
-    const fogY = anchorY + (this.camH - (visTop + 0.55)) * stepH;
+    const fogY = anchorY + (this.camH - (visTop + 1.55)) * stepH;
     if (fogY > -40 * u) {
       ctx.fillStyle = COLORS.textDim;
       ctx.globalAlpha = 0.3 + 0.18 * Math.sin(this.t * 1.6);
@@ -628,12 +695,40 @@ export class GameScene implements Scene {
       ctx.fill();
       ctx.shadowBlur = 0;
     }
+    // フィーバーゲージ(タイマーバーの直下): 溜め=ピンク、フィーバー中=金の残量
+    {
+      const gy = by + 13 * u;
+      const gRatio = this.feverT > 0 ? this.feverT / FEVER.TIME : Math.min(this.combo / FEVER.REQ, 1);
+      ctx.fillStyle = "rgba(20,28,50,0.6)";
+      ctx.beginPath();
+      ctx.roundRect(bx, gy, bw, 4 * u, 2 * u);
+      ctx.fill();
+      if (gRatio > 0) {
+        ctx.fillStyle = this.feverT > 0 ? COLORS.gold : COLORS.accent2;
+        if (this.feverT > 0) {
+          ctx.shadowColor = COLORS.gold;
+          ctx.shadowBlur = 6 * u;
+        }
+        ctx.beginPath();
+        ctx.roundRect(bx, gy, bw * gRatio, 4 * u, 2 * u);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillStyle = urgent ? COLORS.danger : COLORS.text;
     const pulse = urgent ? 1 + 0.12 * Math.sin(this.t * 12) : 1;
     ctx.font = `900 ${26 * u * pulse}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(String(Math.ceil(tw.timeLeft)), w / 2, by + 16 * u);
+    ctx.fillText(String(Math.ceil(tw.timeLeft)), w / 2, by + 21 * u);
+
+    // フィーバー中はボーナス表示
+    if (this.feverT > 0 || this.feverBonus > 0) {
+      ctx.fillStyle = COLORS.gold;
+      ctx.font = `800 ${11 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(`ボーナス +${this.feverBonus}m`, w / 2, by + 50 * u);
+    }
 
     ctx.textAlign = "left";
     ctx.fillStyle = COLORS.textDim;
