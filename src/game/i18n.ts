@@ -96,6 +96,9 @@ const JA = {
   confirmQuit: "ホームに もどる?",
   confirmQuitSub: "この きろくは のこりません",
   resume: "つづける",
+  rankBig1: "👑 だい1い!!",
+  rankBig2: "だい2い!!",
+  rankBig3: "だい3い!!",
 };
 
 const EN: Record<keyof typeof JA, string> = {
@@ -165,6 +168,9 @@ const EN: Record<keyof typeof JA, string> = {
   confirmQuit: "Return home?",
   confirmQuitSub: "This run won't be saved",
   resume: "Keep going",
+  rankBig1: "👑 1ST PLACE!!",
+  rankBig2: "2ND PLACE!!",
+  rankBig3: "3RD PLACE!!",
 };
 
 export type TKey = keyof typeof JA;
@@ -193,8 +199,8 @@ const SKIN_EN: Record<string, { name: string; cond: string }> = {
   sky: { name: "Sky Blue", cond: "Play 10 times" },
   green: { name: "Green", cond: "Play 30 times" },
   purple: { name: "Purple", cond: "Play 50 times" },
-  gold: { name: "Gold", cond: "Best 50m or higher" },
-  rainbow: { name: "Rainbow", cond: "Reach space (80m)" },
+  gold: { name: "Gold", cond: "Best 70m or higher" },
+  rainbow: { name: "Rainbow", cond: "Reach space (120m)" },
   star: { name: "⭐White", cond: "Support the developer" },
 };
 

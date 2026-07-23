@@ -2,6 +2,7 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { TAU } from "../core/math.ts";
 import { sfxStart } from "../audio/sfx.ts";
+import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, TICKETS, skinColor } from "../game/config.ts";
 import { currentLang, t, toggleLang } from "../game/i18n.ts";
@@ -41,6 +42,7 @@ export class HomeScene implements Scene {
   constructor(private app: App) {}
 
   enter(): void {
+    setBgm("menu");
     const save = ensureIdentity(t("defaultNamePrefix"));
     this.best = save.best;
     this.name = save.playerName;

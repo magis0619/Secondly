@@ -75,9 +75,9 @@ export interface Zone {
 
 export const ZONES: Zone[] = [
   { from: 0, name: "ゆうぐれ", skyTop: "#41295e", skyBottom: "#c8613c", tint: "#c8613c", deco: "dusk" },
-  { from: 25, name: "よぞら", skyTop: "#141d3e", skyBottom: "#233060", tint: "#38e1ff", deco: "night" },
-  { from: 50, name: "くものうえ", skyTop: "#2b2558", skyBottom: "#54418c", tint: "#b48cff", deco: "clouds" },
-  { from: 80, name: "うちゅう", skyTop: "#0a0f24", skyBottom: "#131a38", tint: "#ff4fa3", deco: "space" },
+  { from: 35, name: "よぞら", skyTop: "#141d3e", skyBottom: "#233060", tint: "#38e1ff", deco: "night" },
+  { from: 75, name: "くものうえ", skyTop: "#2b2558", skyBottom: "#54418c", tint: "#b48cff", deco: "clouds" },
+  { from: 120, name: "うちゅう", skyTop: "#0a0f24", skyBottom: "#131a38", tint: "#ff4fa3", deco: "space" },
 ];
 
 /** ゾーン境界の色ブレンド幅(m) */
@@ -124,8 +124,8 @@ export const SKINS: Skin[] = [
   { id: "sky", name: "みずいろ", color: "#38b6ff", cond: { type: "plays", n: 10 }, condText: "10かい あそぶ" },
   { id: "green", name: "みどり", color: "#43d9a3", cond: { type: "plays", n: 30 }, condText: "30かい あそぶ" },
   { id: "purple", name: "むらさき", color: "#9b6bf3", cond: { type: "plays", n: 50 }, condText: "50かい あそぶ" },
-  { id: "gold", name: "ゴールド", color: "#ffd166", cond: { type: "best", n: 50 }, condText: "ベスト50mいじょう" },
-  { id: "rainbow", name: "レインボー", color: "rainbow", cond: { type: "best", n: 80 }, condText: "うちゅうに とうたつ(80m)" },
+  { id: "gold", name: "ゴールド", color: "#ffd166", cond: { type: "best", n: 70 }, condText: "ベスト70mいじょう" },
+  { id: "rainbow", name: "レインボー", color: "rainbow", cond: { type: "best", n: 120 }, condText: "うちゅうに とうたつ(120m)" },
   { id: "star", name: "⭐しろ", color: "#f4f7ff", cond: { type: "support", n: 1 }, condText: "かいはつしゃを おうえん" },
 ];
 

@@ -2,6 +2,7 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { TAU } from "../core/math.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
+import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, SKINS, skinColor } from "../game/config.ts";
 import { skinCond, skinName, t } from "../game/i18n.ts";
@@ -21,6 +22,7 @@ export class SkinsScene implements Scene {
   constructor(private app: App) {}
 
   enter(): void {
+    setBgm("menu");
     this.save = loadSave();
   }
 

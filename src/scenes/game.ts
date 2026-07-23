@@ -4,6 +4,7 @@ import { TAU, clamp, damp, lerp } from "../core/math.ts";
 import {
   sfxCount, sfxFall, sfxGo, sfxHop, sfxTick, sfxTimeup, sfxZone,
 } from "../audio/sfx.ts";
+import { setBgm } from "../audio/bgm.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
 import { logEvent } from "../game/analytics.ts";
@@ -105,6 +106,7 @@ export class GameScene implements Scene {
     const save = ensureIdentity();
     this.best = save.best;
     this.skin = save.skin;
+    setBgm("game");
     logEvent("play_start", { mode: this.mode });
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__climb = {
@@ -161,7 +163,10 @@ export class GameScene implements Scene {
     // フィーバー残り時間(切れたら足場を左右に戻す。直後の1段は両側OKの猶予つき)
     if (this.feverT > 0) {
       this.feverT = Math.max(this.feverT - dt, 0);
-      if (this.feverT === 0) this.tower.setFever(false);
+      if (this.feverT === 0) {
+        this.tower.setFever(false);
+        setBgm("game");
+      }
     }
 
     // ホップ中のトレイル(残像パーティクル)
@@ -202,6 +207,7 @@ export class GameScene implements Scene {
             this.feverT = FEVER.TIME;
             this.feverCount++;
             this.tower.setFever(true);
+            setBgm("fever");
             logEvent("fever_start");
             sfxZone();
             this.banner = { text: t("feverBanner"), t: 1.4 };
@@ -245,6 +251,7 @@ export class GameScene implements Scene {
           if (this.feverT > 0) {
             this.feverT = 0; // ミスでフィーバー即終了
             this.tower.setFever(false);
+            setBgm("game");
           }
           const dist = ev.from + 1 - ev.to;
           sfxFall(dist);
@@ -342,7 +349,7 @@ export class GameScene implements Scene {
     const onScreen = (y: number, m = 80 * u) => y > -m && y < H + m;
 
     // 星(空のドームとしてループ。高度が上がるほど濃く)
-    const starAlpha = clamp((this.camH - 12) / 30, 0, 0.9);
+    const starAlpha = clamp((this.camH - 20) / 40, 0, 0.9);
     if (starAlpha > 0) {
       ctx.fillStyle = "#ffffff";
       for (let i = 0; i < 26; i++) {
@@ -383,9 +390,9 @@ export class GameScene implements Scene {
       }
     }
 
-    // よぞら: 月(高度34m。近づくと上から現れ、登り切ると下へ抜ける)
+    // よぞら: 月(高度50m。近づくと上から現れ、登り切ると下へ抜ける)
     {
-      const my = this.py(34, 0.25);
+      const my = this.py(50, 0.25);
       if (onScreen(my)) {
         const mx = w * 0.22;
         ctx.fillStyle = css(hexRgb("#f4ecd0"), 0.95);
@@ -399,10 +406,10 @@ export class GameScene implements Scene {
       }
     }
 
-    // くものうえ: 雲(高度48〜76mに配置+横ドリフト)
+    // くものうえ: 雲(高度80〜116mに配置+横ドリフト)
     ctx.fillStyle = css(hexRgb("#cbd4ff"), 0.16);
     for (let i = 0; i < 5; i++) {
-      const alt = 48 + i * 7;
+      const alt = 80 + i * 9;
       const cy = this.py(alt, 0.5);
       if (!onScreen(cy)) continue;
       const cx = ((i * 137 + this.t * (8 + i * 3) * u) % (w + 200)) - 100;
@@ -413,9 +420,9 @@ export class GameScene implements Scene {
       }
     }
 
-    // うちゅう: 惑星(高度92m)+オーロラ帯(高度86m〜)
+    // うちゅう: 惑星(高度135m)+オーロラ帯(高度128m〜)
     {
-      const pyy = this.py(92, 0.2);
+      const pyy = this.py(135, 0.2);
       if (onScreen(pyy)) {
         const px = w * 0.78;
         ctx.fillStyle = css(hexRgb("#ff8a5c"), 0.9);
@@ -429,7 +436,7 @@ export class GameScene implements Scene {
         ctx.stroke();
       }
       for (let b = 0; b < 2; b++) {
-        const ay = this.py(86 + b * 10, 0.3);
+        const ay = this.py(128 + b * 12, 0.3);
         if (!onScreen(ay, 60 * u)) continue;
         ctx.strokeStyle = css(hexRgb(b === 0 ? "#38e1ff" : "#ff4fa3"), 0.12);
         ctx.lineWidth = 22 * u;

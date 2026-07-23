@@ -1,6 +1,7 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
+import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, LEGAL } from "../game/config.ts";
 import { productDesc, productLabel, t } from "../game/i18n.ts";
@@ -26,6 +27,7 @@ export class StoreScene implements Scene {
   constructor(private app: App) {}
 
   enter(): void {
+    setBgm("menu");
     this.save = loadSave();
   }
 

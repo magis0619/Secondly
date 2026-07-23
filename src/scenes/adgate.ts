@@ -1,6 +1,7 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxGo, sfxStart } from "../audio/sfx.ts";
+import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { t } from "../game/i18n.ts";
@@ -43,6 +44,10 @@ export class AdGateScene implements Scene {
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(private app: App) {}
+
+  enter(): void {
+    setBgm("menu");
+  }
 
   private grantAndStart(): void {
     if (this.started) return;

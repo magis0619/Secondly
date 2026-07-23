@@ -86,6 +86,30 @@ export function sfxBest(): void {
   notes.forEach((f, i) => tone(f, 0.25, { type: "triangle", gain: 0.15, delay: i * 0.08 }));
 }
 
+/** リザルト2〜3位: 明るいファンファーレ(タ・タ・ター!) */
+export function sfxFanfare(): void {
+  tone(523, 0.11, { type: "square", gain: 0.13 });
+  tone(523, 0.11, { type: "square", gain: 0.13, delay: 0.13 });
+  tone(659, 0.11, { type: "square", gain: 0.14, delay: 0.26 });
+  tone(784, 0.55, { type: "square", gain: 0.16, delay: 0.4 });
+  tone(988, 0.55, { type: "triangle", gain: 0.1, delay: 0.4 });
+}
+
+/** リザルト1位: 特別なファンファーレ(長め+和音+キラキラ上昇) */
+export function sfxFanfareBig(): void {
+  const head = [523, 659, 784, 1047];
+  head.forEach((f, i) => tone(f, 0.13, { type: "square", gain: 0.14, delay: i * 0.12 }));
+  // フィナーレ和音
+  for (const f of [1047, 1319, 1568]) {
+    tone(f, 0.9, { type: "square", gain: 0.09, delay: 0.55 });
+    tone(f / 2, 0.9, { type: "triangle", gain: 0.08, delay: 0.55 });
+  }
+  // キラキラ上昇
+  [1568, 1865, 2093, 2637, 3136].forEach((f, i) =>
+    tone(f, 0.18, { type: "triangle", gain: 0.07, delay: 0.95 + i * 0.07 }),
+  );
+}
+
 /** UIタップ */
 export function sfxStart(): void {
   tone(660, 0.08, { type: "triangle", gain: 0.14, slideTo: 990 });

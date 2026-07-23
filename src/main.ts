@@ -5,6 +5,7 @@ import { createInput } from "./core/input.ts";
 import { startLoop } from "./core/loop.ts";
 import { SceneManager } from "./core/scene.ts";
 import { createViewport } from "./core/viewport.ts";
+import { currentBgm } from "./audio/bgm.ts";
 import { logEvent } from "./game/analytics.ts";
 import { COLORS, LEGAL, ONLINE } from "./game/config.ts";
 import { initLang } from "./game/i18n.ts";
@@ -16,6 +17,7 @@ logEvent("app_open");
 // devビルド限定: 検証用にONLINE設定を注入できるようにする
 if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__cfg = { ONLINE, LEGAL };
+  (window as unknown as Record<string, unknown>).__bgm = { current: currentBgm };
 }
 
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
