@@ -1,7 +1,14 @@
 {
-  "hosting": {
-    "target": "climb30-privacy",
-    "public": "privacy/public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
-  }
+  "hosting": [
+    {
+      "target": "climb30-privacy",
+      "public": "privacy/public",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    },
+    {
+      "target": "climb30-marketing",
+      "public": "marketing/public",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    }
+  ]
 }

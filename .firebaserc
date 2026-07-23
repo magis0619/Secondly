@@ -7,6 +7,9 @@
       "hosting": {
         "climb30-privacy": [
           "climb30-privacy"
+        ],
+        "climb30-marketing": [
+          "climb30-marketing"
         ]
       }
     }
