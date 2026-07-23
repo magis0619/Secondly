@@ -111,6 +111,7 @@ export class GameScene implements Scene {
       this.confirmOpen = true;
     }
   };
+  private visListenerTimer: ReturnType<typeof setTimeout> | undefined;
 
   enter(): void {
     const save = ensureIdentity();
@@ -119,7 +120,11 @@ export class GameScene implements Scene {
     this.chara = save.chara;
     setBgm("game");
     logEvent("play_start", { mode: this.mode });
-    document.addEventListener("visibilitychange", this.visHandler);
+    // インタースティシャル広告を閉じた直後はvisibilitychangeが遅れて発火することがあり、
+    // 開始直後にリスナーを付けると即ポーズしてしまう。少し遅らせてから監視を始める。
+    this.visListenerTimer = setTimeout(() => {
+      document.addEventListener("visibilitychange", this.visHandler);
+    }, 800);
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__climb = {
         tower: this.tower,
@@ -149,6 +154,7 @@ export class GameScene implements Scene {
   }
 
   exit(): void {
+    clearTimeout(this.visListenerTimer);
     document.removeEventListener("visibilitychange", this.visHandler);
   }
 
