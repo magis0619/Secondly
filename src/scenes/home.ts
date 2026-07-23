@@ -128,7 +128,8 @@ export class HomeScene implements Scene {
 
   // ==================== ロゴ ====================
 
-  private drawLogo(ctx: CanvasRenderingContext2D): void {
+  /** ロゴ一式(1行目+バッジ+キャッチコピー)を描き、直下に置ける基準Yを返す */
+  private drawLogo(ctx: CanvasRenderingContext2D): number {
     const { w, h, unit: u } = this.app.vp;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -139,7 +140,7 @@ export class HomeScene implements Scene {
     const word = ja ? "のぼれ!" : "CLIMB";
     const lw = (ja ? 52 : 44) * u;
     const x0 = w / 2 - ((word.length - 1) * lw) / 2;
-    const baseY = h * 0.105;
+    const baseY = h * 0.125;
     for (let i = 0; i < word.length; i++) {
       const bounce = Math.max(0, Math.sin(this.t * 2.6 - i * 0.55));
       const rot = Math.sin(this.t * 1.4 + i * 1.7) * 0.05;
@@ -160,7 +161,7 @@ export class HomeScene implements Scene {
 
     // 2行目(JA=「30びょう」/ EN=「30」): ゴールドのバッジ風(ゆらゆら)
     ctx.save();
-    ctx.translate(w / 2, h * 0.195);
+    ctx.translate(w / 2, h * 0.215);
     ctx.rotate(-0.06 + Math.sin(this.t * 1.8) * 0.025);
     const badge = (text: string, px: number, py: number, size: number) => {
       ctx.font = `900 ${size * u}px ${FONT}`;
@@ -183,14 +184,16 @@ export class HomeScene implements Scene {
     }
     ctx.restore();
 
-    // キャッチコピー
+    // キャッチコピー(この直下にプレイヤー名/ベスト行を連鎖配置するので基準Yを返す)
     const tag = t("tagline");
+    const taglineY = h * 0.275;
     ctx.font = `800 ${14 * u}px ${FONT}`;
     ctx.strokeStyle = "rgba(58,34,96,0.55)";
     ctx.lineWidth = 4 * u;
-    ctx.strokeText(tag, w / 2, h * 0.255);
+    ctx.strokeText(tag, w / 2, taglineY);
     ctx.fillStyle = "#fff8ef";
-    ctx.fillText(tag, w / 2, h * 0.255);
+    ctx.fillText(tag, w / 2, taglineY);
+    return taglineY;
   }
 
   // ==================== マスコット ====================
@@ -260,29 +263,38 @@ export class HomeScene implements Scene {
     this.drawBackdrop(ctx);
     ctx.save();
     this.drawMascot(ctx);
-    this.drawLogo(ctx);
+    const taglineY = this.drawLogo(ctx);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // プレイヤー名(タップで変更)。支援者は⭐
-    this.nameRect = { x: w / 2 - 110 * u, y: h * 0.285, w: 220 * u, h: 30 * u };
+    // プレイヤー名(タップで変更)。支援者は⭐。キャッチコピーの直下にu単位で連鎖配置
+    const nameY = taglineY + 40 * u;
+    const bestY = nameY + 28 * u;
+    this.nameRect = { x: w / 2 - 110 * u, y: nameY - 15 * u, w: 220 * u, h: 30 * u };
     ctx.font = `800 ${13 * u}px ${FONT}`;
-    const nameLabel = `${this.supporter > 0 ? "⭐ " : ""}${this.name} ✏️`;
+    // 「✏️」は編集を示すだけの添え物なので中央寄せ計算には含めない(本文の重心がずれる)
+    const nameCore = `${this.supporter > 0 ? "⭐ " : ""}${this.name}`;
+    const nameCoreW = ctx.measureText(nameCore).width;
     ctx.strokeStyle = "rgba(58,34,96,0.5)";
     ctx.lineWidth = 3.5 * u;
-    ctx.strokeText(nameLabel, w / 2, this.nameRect.y + 15 * u);
+    ctx.strokeText(nameCore, w / 2, nameY);
     ctx.fillStyle = "#fff2df";
-    ctx.fillText(nameLabel, w / 2, this.nameRect.y + 15 * u);
+    ctx.fillText(nameCore, w / 2, nameY);
+    ctx.textAlign = "left";
+    const pencilX = w / 2 + nameCoreW / 2 + 6 * u;
+    ctx.strokeText("✏️", pencilX, nameY);
+    ctx.fillText("✏️", pencilX, nameY);
+    ctx.textAlign = "center";
 
     if (this.best > 0) {
       const bestText = `👑 ${t("bestLabel")} ${this.best}m`;
       ctx.font = `900 ${15 * u}px ${FONT}`;
       ctx.strokeStyle = "rgba(58,34,96,0.55)";
       ctx.lineWidth = 4 * u;
-      ctx.strokeText(bestText, w / 2, h * 0.335);
+      ctx.strokeText(bestText, w / 2, bestY);
       ctx.fillStyle = COLORS.gold;
-      ctx.fillText(bestText, w / 2, h * 0.335);
+      ctx.fillText(bestText, w / 2, bestY);
     }
 
     // 左上: 言語切り替え / 右上: 設定

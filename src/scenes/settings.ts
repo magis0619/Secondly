@@ -7,7 +7,7 @@ import { COLORS, LEGAL, ONLINE, VERSION } from "../game/config.ts";
 import { t, toggleLang } from "../game/i18n.ts";
 import { loadSave, setPlayerName, toggleBgmOff, toggleSfxOff } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
-import { FONT, drawButton, inRect } from "../render/ui.ts";
+import { FONT, drawButton, drawIconLabel, inRect } from "../render/ui.ts";
 import { HomeScene } from "./home.ts";
 import { HowToModal } from "./howto.ts";
 
@@ -117,12 +117,12 @@ export class SettingsScene implements Scene {
       ctx.fillStyle = COLORS.text;
       ctx.font = `800 ${13.5 * u}px ${FONT}`;
       if (r.sub) {
-        ctx.fillText(r.label(), r.rect.x + r.rect.w / 2, r.rect.y + 22 * u);
+        drawIconLabel(ctx, r.rect.x + r.rect.w / 2, r.rect.y + 22 * u, r.label(), 6 * u);
         ctx.fillStyle = COLORS.textDim;
         ctx.font = `700 ${11.5 * u}px ${FONT}`;
         ctx.fillText(r.sub(), r.rect.x + r.rect.w / 2, r.rect.y + 46 * u);
       } else {
-        ctx.fillText(r.label(), r.rect.x + r.rect.w / 2, r.rect.y + r.rect.h / 2);
+        drawIconLabel(ctx, r.rect.x + r.rect.w / 2, r.rect.y + r.rect.h / 2, r.label(), 6 * u);
       }
     }
 
