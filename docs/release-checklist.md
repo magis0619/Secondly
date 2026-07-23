@@ -155,6 +155,40 @@ export async function showNativeAd(): Promise<boolean> {
 
 各商品に日本語の表示名と説明を入れ、審査用スクショ(ストア画面のスクショでよい)を添付。
 
+### 6-1-b. 各商品の審査メモ(Review Notes、コピペ用)
+
+各商品を提出する際、商品ごとの「Review Notes」欄(アプリ全体の10章の審査メモとは別)に
+以下をそのまま貼る。レビュアーは世界各国のチームなので**英語**で書く
+(日本語コメントは自分用のメモで、貼り付け不要)。
+
+**`noads`(広告じょきょ、非消耗型)**
+
+> This is a non-consumable purchase that permanently removes the interstitial ad
+> that is shown before starting Ranked Mode ("Honban"). It also supports Restore
+> Purchases from the Store screen.
+>
+> How to test: Home screen → tap the shopping cart icon (Store) → tap
+> "こうこく じょきょ" (Remove Ads) → complete the purchase → the ad no longer
+> appears before Ranked Mode starts. To verify restore: reinstall the app (or use
+> a fresh sandbox session) → Store screen → "リストア" (Restore) → ads are removed again.
+
+> (日本語メモ: 非消耗型。ほんばん開始前の広告を恒久的に消す。リストア対応あり)
+
+**`tip_s` / `tip_m` / `tip_l`(開発者おうえん、消耗型)**
+
+> These are consumable purchases that let the player send an optional, one-time
+> tip to the developer. They unlock no additional content, features, or
+> gameplay advantage — the only visible change is a small ⭐ mark shown next to
+> the player's name on the Home screen after any tip purchase. This is a purely
+> voluntary show of support, in line with Guideline 3.2.1(b).
+>
+> How to test: Home screen → tap the shopping cart icon (Store) → tap any of
+> the "おうえん" (Support) items → complete the purchase → a ⭐ appears next to
+> the player name on the Home screen. The purchase can be repeated any number
+> of times (consumable).
+
+> (日本語メモ: 消耗型・追加機能なしの純粋な支援。購入後ホーム名前欄に⭐が付くのみ。3.2.1(b)対策として明記)
+
 ### 6-2. RevenueCat セットアップ `♻️🆕` アカウントは再利用、プロジェクトは新規
 
 前アプリのRevenueCatアカウントにログイン → CLIMB 30用の**プロジェクトを新規作成**する(アカウント自体は共通)。
@@ -308,7 +342,7 @@ App Store Connect側も「日本語」「英語(米国)」の2ロケールで名
 | リストアがない(3.1.1) | 実装済み(ストア画面)。RevenueCat接続を忘れずに |
 | プライバシーポリシーURL切れ(5.1.1) | 提出直前にURLを開いて確認 |
 | ATT の説明不足(5.1.2) | `NSUserTrackingUsageDescription` を必ず入れる。パーソナライズ広告を使わないなら ATT 自体を省略しトラッキング「なし」で申告 |
-| チップ課金の誤解(3.2.1) | 審査メモに「追加機能のない任意の支援」と明記。アプリ内の説明文もその通りになっている |
+| チップ課金の誤解(3.2.1) | 各商品のReview Notes(6-1-b)に「追加機能のない任意の支援」と明記済み。アプリ内の説明文もその通りになっている |
 
 ## 11. 触覚フィードバック(Haptics)
 
