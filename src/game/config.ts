@@ -167,7 +167,7 @@ export const CHARAS: Chara[] = [
  * テンプレは docs/privacy-policy.md — Firebase Hosting等で公開してURLをここに貼る(手順は7章)。
  */
 export const LEGAL = {
-  privacyUrl: "", // 例: "https://climb30-privacy.web.app/"
+  privacyUrl: "https://climb30-privacy.web.app/",
 };
 
 export const ONLINE = {

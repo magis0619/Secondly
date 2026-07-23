@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "climb30-6f201"
+  },
+  "targets": {
+    "climb30-6f201": {
+      "hosting": {
+        "climb30-privacy": [
+          "climb30-privacy"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
