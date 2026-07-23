@@ -168,6 +168,8 @@ export const CHARAS: Chara[] = [
  */
 export const LEGAL = {
   privacyUrl: "https://climb30-privacy.web.app/",
+  // SNSシェアに載せるURL。当面はマーケサイト。App Store公開後はストアURLに差し替え可
+  marketingUrl: "https://climb30-marketing.web.app/",
 };
 
 export const ONLINE = {

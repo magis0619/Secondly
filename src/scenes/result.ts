@@ -9,6 +9,7 @@ import { hapticHeavy } from "../game/haptics.ts";
 import { t } from "../game/i18n.ts";
 import { logEvent } from "../game/analytics.ts";
 import { requestReview } from "../game/monetize.ts";
+import { shareResult } from "../game/share.ts";
 import { loadSave } from "../game/save.ts";
 import { drawFx } from "../render/fx.ts";
 import type { Rect } from "../render/ui.ts";
@@ -225,13 +226,14 @@ export class ResultScene implements Scene {
     const add = (label: string, action: () => void, bg?: string, fg?: string) => {
       const rect = { x: w / 2 - bw / 2, y: by, w: bw, h: bh };
       this.buttons.push({ rect, action, label, bg, fg });
-      by += bh + 15 * u;
+      by += bh + 13 * u;
     };
     add(t("again"), () => {
       // ほんばんはチケット消費(切れていれば補充画面へ)
       if (ranked) startRanked(this.app);
       else this.app.manager.switchTo(new GameScene(this.app, "practice"));
     }, COLORS.accent2);
+    add(t("shareBtn"), () => void shareResult(p.score, ranked), "#3b74d0", "#fff");
     add(t("rankingBtn"), () => this.app.manager.switchTo(new RankingScene(this.app, this.params.rank)), "#25314f", COLORS.text);
     add(t("toHome"), () => this.app.manager.switchTo(new HomeScene(this.app)), "#25314f", COLORS.text);
     for (const b of this.buttons) drawButton(ctx, u, b.rect, b.label, { bg: b.bg, fg: b.fg });

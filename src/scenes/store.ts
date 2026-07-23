@@ -13,6 +13,7 @@ import { addSupport, loadSave, setAdFree } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { drawButton, inRect } from "../render/ui.ts";
 import { HomeScene } from "./home.ts";
+import { ThankYouOverlay } from "./thanks.ts";
 
 /** 🛒 ストア: 広告除去(かいきり)+開発者支援(なんどでも)。購入処理はmonetize.tsに集約 */
 export class StoreScene implements Scene {
@@ -24,16 +25,25 @@ export class StoreScene implements Scene {
   private restoreRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private privacyRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private thanks: ThankYouOverlay;
 
-  constructor(private app: App) {}
+  constructor(private app: App) {
+    this.thanks = new ThankYouOverlay(app);
+  }
 
   enter(): void {
     setBgm("menu");
     this.save = loadSave();
+    // 開発ビルドのみ: 御礼オーバーレイの見た目確認用フック(web版purchase()はfalseを返すため)
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__thanks = (id = "tip_m", first = false) =>
+        this.thanks.show(id, this.save.supporter + 1, first);
+    }
   }
 
   update(dt: number): void {
     this.t += dt;
+    this.thanks.update(dt);
     if (this.toast) {
       this.toast.t -= dt;
       if (this.toast.t <= 0) this.toast = null;
@@ -52,8 +62,10 @@ export class StoreScene implements Scene {
         this.save = setAdFree();
         this.toast = { text: t("noadsToast"), t: 2.8 };
       } else {
+        const before = this.save.supporter;
         this.save = addSupport();
-        this.toast = { text: t("supportToast"), t: 2.8 };
+        // 手厚い御礼オーバーレイ(初回=⭐スキン解放も告知)
+        this.thanks.show(p.id, this.save.supporter, before === 0);
       }
       sfxBest();
       hapticHeavy();
@@ -162,9 +174,11 @@ export class StoreScene implements Scene {
       ctx.globalAlpha = 1;
     }
     ctx.restore();
+    this.thanks.draw(ctx); // 最前面
   }
 
   onUp(x: number, y: number): void {
+    if (this.thanks.onUp(x, y)) return; // 御礼オーバーレイが最優先でタップ吸収
     for (const row of this.rows) {
       if (inRect(row.rect, x, y)) {
         sfxStart();
