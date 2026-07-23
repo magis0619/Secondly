@@ -10,7 +10,9 @@ const config: CapacitorConfig = {
   // ★リリース前に必ず自分の Bundle ID へ変更すること（例: com.yourname.climb30）。
   //   App Store で一意である必要があり、後から変更できない。docs/release-checklist.md 参照。
   appId: "com.example.secondly",
-  appName: "CLIMB 30",
+  // 英語圏でのデフォルト表示名。日本語の「のぼれ！30秒」は InfoPlist.strings で
+  // ローカライズする(docs/release-checklist.md「表示名のローカライズ」参照)。
+  appName: "Climb 30",
   webDir: "dist",
   ios: {
     // WKWebView の背景色（起動直後/セーフエリア外に見える色）。

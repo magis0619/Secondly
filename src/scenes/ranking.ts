@@ -1,7 +1,9 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxStart } from "../audio/sfx.ts";
+import { logEvent } from "../game/analytics.ts";
 import { COLORS } from "../game/config.ts";
+import { t } from "../game/i18n.ts";
 import type { WorldEntry } from "../game/online.ts";
 import { fetchTop, onlineEnabled, syncBest } from "../game/online.ts";
 import type { SaveData } from "../game/save.ts";
@@ -33,6 +35,7 @@ export class RankingScene implements Scene {
       this.tab = "world";
       this.loadWorld();
     }
+    logEvent("ranking_view", { tab: this.tab });
   }
 
   private loadWorld(): void {
@@ -65,13 +68,13 @@ export class RankingScene implements Scene {
     ctx.textBaseline = "middle";
     ctx.fillStyle = COLORS.text;
     ctx.font = `900 ${26 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("🏆 ランキング", w / 2, safeTop + 34 * u);
+    ctx.fillText(t("rankingTitle"), w / 2, safeTop + 34 * u);
 
     // タブ
     this.tabRects = [];
     const tabs: { tab: Tab; label: string }[] = [
-      { tab: "world", label: "🌏 ほんばん" },
-      { tab: "local", label: "📱 れんしゅう" },
+      { tab: "world", label: t("tabWorld") },
+      { tab: "local", label: t("tabLocal") },
     ];
     tabs.forEach((tb, i) => {
       const rect: Rect = { x: w / 2 - 150 * u + i * 155 * u, y: safeTop + 58 * u, w: 145 * u, h: 38 * u };
@@ -89,14 +92,14 @@ export class RankingScene implements Scene {
 
     if (this.tab === "local") {
       const list = this.save.ranking;
-      if (list.length === 0) this.drawEmpty(ctx, "まだ きろくが ないよ");
+      if (list.length === 0) this.drawEmpty(ctx, t("noRecords"));
       list.forEach((e, i) => {
         const d = new Date(e.date);
         this.drawRow(ctx, listTop + i * rowH, i + 1, "", e.score, i + 1 === this.highlightRank, `${d.getMonth() + 1}/${d.getDate()}`);
       });
     } else {
       if (!onlineEnabled()) {
-        this.drawEmpty(ctx, "オンライン未接続", "README の手順で Firebase を設定してね");
+        this.drawEmpty(ctx, t("offline"), t("offlineHint"));
       } else if (this.worldState === "loading") {
         // スピナー
         ctx.strokeStyle = COLORS.accent;
@@ -105,9 +108,9 @@ export class RankingScene implements Scene {
         ctx.arc(w / 2, h * 0.4, 16 * u, this.t * 5, this.t * 5 + 4.2);
         ctx.stroke();
       } else if (this.worldState === "error") {
-        this.drawEmpty(ctx, "つうしんエラー", "でんぱの いいところで もういちど");
+        this.drawEmpty(ctx, t("netError"), t("netErrorHint"));
       } else if (this.world && this.world.length === 0) {
-        this.drawEmpty(ctx, "まだ だれも いないよ", "せかいで さいしょの きろくを つくろう!");
+        this.drawEmpty(ctx, t("worldEmpty"), t("worldEmptyHint"));
       } else if (this.world) {
         const maxRows = Math.floor((h - safeBottom - 100 * u - listTop) / rowH);
         this.world.slice(0, maxRows).forEach((e, i) => {
@@ -117,11 +120,11 @@ export class RankingScene implements Scene {
     }
 
     this.backRect = { x: w / 2 - 100 * u, y: h - safeBottom - 76 * u, w: 200 * u, h: 50 * u };
-    drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text });
+    drawButton(ctx, u, this.backRect, t("back"), { bg: "#25314f", fg: COLORS.text });
     ctx.restore();
   }
 
-  private drawEmpty(ctx: CanvasRenderingContext2D, line1: string, line2 = "あそんで きろくを つくろう!"): void {
+  private drawEmpty(ctx: CanvasRenderingContext2D, line1: string, line2 = t("playToRecord")): void {
     const { w, h, unit: u } = this.app.vp;
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${14 * u}px -apple-system, system-ui, sans-serif`;
@@ -174,6 +177,7 @@ export class RankingScene implements Scene {
       if (inRect(tr.rect, x, y) && this.tab !== tr.tab) {
         sfxStart();
         this.tab = tr.tab;
+        logEvent("ranking_view", { tab: tr.tab });
         if (tr.tab === "world" && this.worldState === "idle") this.loadWorld();
         return;
       }

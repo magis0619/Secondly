@@ -83,12 +83,19 @@ export const ZONES: Zone[] = [
 /** ゾーン境界の色ブレンド幅(m) */
 export const ZONE_BLEND = 8;
 
-/** フィーバーコンボ: ノーミスでREQ回登るとTIME秒間、1ホップごとにボーナス+BONUS m */
+/**
+ * フィーバーコンボ: ノーミスでREQ回登るとTIME秒間フィーバー。
+ * フィーバー中は足場が中央1本になり、どちらをタップしても登れる(=連打で登る)。
+ * ホップも速くなる(HOP_TIME)。スコアボーナスはなし(高さがそのまま伸びる)。
+ */
 export const FEVER = {
   REQ: 12,
   TIME: 5,
-  BONUS: 1,
+  HOP_TIME: 0.09,
 } as const;
+
+/** アプリバージョン(設定画面に表示) */
+export const VERSION = "1.0.0";
 
 /** ほんばんのチケット: 1日DAILY回無料、広告1回でAD_REWARD回ぶん補充 */
 export const TICKETS = {

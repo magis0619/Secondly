@@ -2,7 +2,9 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { TAU } from "../core/math.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
+import { logEvent } from "../game/analytics.ts";
 import { COLORS, SKINS, skinColor } from "../game/config.ts";
+import { skinCond, skinName, t } from "../game/i18n.ts";
 import type { SaveData } from "../game/save.ts";
 import { isSkinUnlocked, loadSave, setSkin } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
@@ -37,10 +39,10 @@ export class SkinsScene implements Scene {
     ctx.textAlign = "center";
     ctx.fillStyle = COLORS.text;
     ctx.font = `900 ${26 * u}px ${FONT}`;
-    ctx.fillText("👕 きせかえ", w / 2, safeTop + 34 * u);
+    ctx.fillText(t("skinsTitle"), w / 2, safeTop + 34 * u);
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${11.5 * u}px ${FONT}`;
-    ctx.fillText("あそんで あたらしい バンダナを あつめよう", w / 2, safeTop + 60 * u);
+    ctx.fillText(t("skinsSub"), w / 2, safeTop + 60 * u);
 
     // 2列グリッド
     this.cells = [];
@@ -89,14 +91,15 @@ export class SkinsScene implements Scene {
       ctx.textAlign = "center";
       ctx.fillStyle = unlocked ? COLORS.text : COLORS.textDim;
       ctx.font = `800 ${12.5 * u}px ${FONT}`;
-      ctx.fillText(unlocked ? s.name : `🔒 ${s.name}`, cx, rect.y + 82 * u);
+      const dispName = skinName(s.id, s.name);
+      ctx.fillText(unlocked ? dispName : `🔒 ${dispName}`, cx, rect.y + 82 * u);
       ctx.fillStyle = selected ? COLORS.accent : COLORS.textDim;
       ctx.font = `700 ${9.5 * u}px ${FONT}`;
-      ctx.fillText(selected ? "そうびちゅう!" : s.condText, cx, rect.y + 101 * u);
+      ctx.fillText(selected ? t("equipped") : skinCond(s.id, s.condText), cx, rect.y + 101 * u);
     });
 
     this.backRect = { x: w / 2 - 100 * u, y: h - safeBottom - 76 * u, w: 200 * u, h: 50 * u };
-    drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text });
+    drawButton(ctx, u, this.backRect, t("back"), { bg: "#25314f", fg: COLORS.text });
     ctx.restore();
   }
 
@@ -106,6 +109,7 @@ export class SkinsScene implements Scene {
         const skin = SKINS.find((s) => s.id === c.id)!;
         if (isSkinUnlocked(skin, this.save) && this.save.skin !== c.id) {
           this.save = setSkin(c.id);
+          logEvent("skin_select", { id: c.id });
           sfxBest();
         }
         return;

@@ -5,8 +5,13 @@ import { createInput } from "./core/input.ts";
 import { startLoop } from "./core/loop.ts";
 import { SceneManager } from "./core/scene.ts";
 import { createViewport } from "./core/viewport.ts";
+import { logEvent } from "./game/analytics.ts";
 import { COLORS, LEGAL, ONLINE } from "./game/config.ts";
+import { initLang } from "./game/i18n.ts";
 import { HomeScene } from "./scenes/home.ts";
+
+initLang();
+logEvent("app_open");
 
 // devビルド限定: 検証用にONLINE設定を注入できるようにする
 if (import.meta.env.DEV) {

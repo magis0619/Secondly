@@ -10,6 +10,8 @@
  *  2. purchase() / restorePurchases() を StoreKit(または RevenueCat)に実装
  *  3. 価格表示はストアから取得した実価格に置き換える(PRODUCTSのpriceは仮)
  */
+import { productLabel, t } from "./i18n.ts";
+
 export type ProductId = "noads" | "tip_s" | "tip_m" | "tip_l";
 
 export interface Product {
@@ -40,9 +42,7 @@ export async function showNativeAd(): Promise<boolean> {
 
 /** 購入。スタブはconfirmで成功扱い。iOS化でStoreKitに差し替え */
 export async function purchase(p: Product): Promise<boolean> {
-  return window.confirm(
-    `【開発ビルドの擬似購入】\n${p.label} ${p.price}\n実際の請求はありません。購入しますか?`,
-  );
+  return window.confirm(t("purchaseConfirm", { label: productLabel(p.id, p.label), price: p.price }));
 }
 
 /** 購入のリストア。スタブは空(セーブに残るため不要)。iOS化でStoreKitに差し替え */

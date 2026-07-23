@@ -184,6 +184,42 @@ export async function restorePurchases(): Promise<ProductId[]> {
 - 実機の設定 → App Store → サンドボックスアカウント にログインして購入テスト
 - 確認項目: noads購入→ほんばんが広告なし / アプリ削除→再インストール→**リストアでnoads復活** / tip購入→⭐とお礼表示
 
+## 6.5 分析(Firebase Analytics)と表示名のローカライズ
+
+### 分析の接続(任意だが推奨)
+
+ゲーム内は `src/game/analytics.ts` の `logEvent()` に計測が集約済み(イベント一覧はファイル冒頭)。
+開発ビルドではconsole出力のみ。iOSで実際に収集するには:
+
+```bash
+npm i @capacitor-firebase/analytics firebase && npx cap sync ios
+```
+
+Firebaseコンソールで既存プロジェクト(climb30-*)にiOSアプリを追加し、`GoogleService-Info.plist` を
+Xcodeの `App/App/` に入れる。`analytics.ts` の `logEvent` を差し替え:
+
+```ts
+import { FirebaseAnalytics } from "@capacitor-firebase/analytics";
+
+export function logEvent(name: string, params?: AnalyticsParams): void {
+  void FirebaseAnalytics.logEvent({ name, params: params ?? {} }).catch(() => {});
+}
+```
+
+### 表示名のローカライズ(のぼれ！30秒 / Climb 30)
+
+Xcodeで: プロジェクト → Info → Localizations に **Japanese** を追加 →
+`InfoPlist.strings` を作成しローカライズを有効化して、それぞれに:
+
+```
+// InfoPlist.strings (Japanese)
+"CFBundleDisplayName" = "のぼれ！30秒";
+// InfoPlist.strings (English)
+"CFBundleDisplayName" = "Climb 30";
+```
+
+App Store Connect側も「日本語」「英語(米国)」の2ロケールで名前・説明を登録する(`docs/store-listing.md`)。
+
 ## 7. プライバシーポリシー(必須)
 
 1. `docs/privacy-policy.md` の `【】` 箇所(連絡先メール等)を埋める
@@ -202,6 +238,7 @@ export async function restorePurchases(): Promise<ProductId[]> {
 | ユーザコンテンツ > その他 | ニックネーム | アプリの機能 | いいえ | いいえ |
 | 識別子 > デバイスID | 広告識別子(IDFA) | 広告 | いいえ | **はい**(ATT許可時) |
 | 使用状況データ | 広告SDKの計測 | 広告 | いいえ | はい |
+| 使用状況データ > 製品の操作 | Firebase Analytics(プレイ回数等) | 分析 | いいえ | いいえ |
 
 (AdMobのパーソナライズ広告を使わない設定にするならトラッキング「いいえ」+ATT省略も可)
 

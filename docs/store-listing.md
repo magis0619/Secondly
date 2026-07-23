@@ -1,11 +1,14 @@
 # App Store 掲載文の下書き(コピペ用)
 
 App Store Connect の各欄にそのまま貼れる下書き。文字数制限内に収めてある。
+**「日本語」と「英語(米国)」の2ロケールで登録する**(App情報 → ローカリゼーションを追加)。
+
+# 日本語ロケール
 
 ## アプリ名(30文字まで)
 
 ```
-CLIMB 30 - 30秒のぼりアクション
+のぼれ！30秒 - 左右タップの登りアクション
 ```
 
 ## サブタイトル(30文字まで)
@@ -25,7 +28,7 @@ CLIMB 30 - 30秒のぼりアクション
 ```
 ◆ 30秒で、どこまで登れる?
 
-CLIMB 30は「左右をタップするだけ」の超シンプルな登りアクション。
+「のぼれ！30秒」は左右をタップするだけの超シンプルな登りアクション。
 次の足場は左か右か──30秒間、自分の反射神経だけが頼りです。
 
 ◆ あそびかた
@@ -42,8 +45,8 @@ CLIMB 30は「左右をタップするだけ」の超シンプルな登りアク
 ・ニックネームは自由に変更OK
 
 ◆ 課金について
-・「ほんばん」モードのプレイ前に短い広告が流れます
-・広告除去(買い切り)を購入すると、いつでも広告なしで挑戦できます
+・「ほんばん」モードは1日3回無料。短い広告を見ると回数を追加できます
+・広告除去(買い切り)を購入すると、いつでも回数無制限で挑戦できます
 ・開発者を応援できるチップ(おうえん)もあります(追加機能はありません)
 ```
 
@@ -51,6 +54,60 @@ CLIMB 30は「左右をタップするだけ」の超シンプルな登りアク
 
 ```
 カジュアル,タップ,登る,クライム,30秒,ランキング,暇つぶし,簡単,アクション,ハイスコア,ジャンプ
+```
+
+# 英語(米国)ロケール
+
+## Name (30 chars)
+
+```
+Climb 30 - Tap Climbing Race
+```
+
+## Subtitle (30 chars)
+
+```
+Just tap L/R. Beat the world!
+```
+
+## Promotional Text (170 chars)
+
+```
+How high can you climb in 30 seconds? Just tap left or right. Climb from sunset to outer space and take on rivals around the world!
+```
+
+## Description
+
+```
+* How high can you climb in 30 seconds?
+
+Climb 30 is a super-simple climbing action game: just tap left or right.
+Is the next step on the left or the right? For 30 seconds, your reflexes are all you've got.
+
+* How to play
+- Steps appear on the left or the right
+- Tap the side where the next step is!
+- Miss, and you fall back down. The longer one side continues, the bigger the fall...
+- Reach the highest point (m) you can within 30 seconds
+
+* Features
+- Practice mode: play free anytime
+- Ranked mode: challenge the world leaderboard
+- Fever mode: chain 12 climbs without missing, then mash to rocket upward!
+- Scenery changes as you climb: sunset, night sky, above the clouds, outer space
+- One run is 30 seconds - perfect for a quick break
+- Unlock bandana outfits as you play
+
+* About purchases
+- Ranked mode gives you 3 free plays a day; watch a short ad for more
+- Remove Ads (one-time) makes Ranked unlimited, with no ads
+- Optional tips to support the developer (no extra features)
+```
+
+## Keywords (100 chars)
+
+```
+casual,tap,climb,30 seconds,leaderboard,quick,simple,action,high score,jump,arcade
 ```
 
 ## その他の欄

@@ -2,13 +2,16 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { TAU } from "../core/math.ts";
 import { sfxStart } from "../audio/sfx.ts";
-import { COLORS, ONLINE, TICKETS, skinColor } from "../game/config.ts";
-import { ensureIdentity, getTickets, setPlayerName } from "../game/save.ts";
+import { logEvent } from "../game/analytics.ts";
+import { COLORS, TICKETS, skinColor } from "../game/config.ts";
+import { currentLang, t, toggleLang } from "../game/i18n.ts";
+import { ensureIdentity, getTickets } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { startRanked } from "./adgate.ts";
 import { GameScene } from "./game.ts";
 import { RankingScene } from "./ranking.ts";
+import { SettingsScene } from "./settings.ts";
 import { SkinsScene } from "./skins.ts";
 import { StoreScene } from "./store.ts";
 
@@ -32,11 +35,13 @@ export class HomeScene implements Scene {
   private rankRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private storeRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private nameRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private gearRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private langRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(private app: App) {}
 
   enter(): void {
-    const save = ensureIdentity();
+    const save = ensureIdentity(t("defaultNamePrefix"));
     this.best = save.best;
     this.name = save.playerName;
     this.adFree = save.adFree;
@@ -118,9 +123,10 @@ export class HomeScene implements Scene {
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
 
-    // 「CLIMB」: 1文字ずつ時間差でぷよん
-    const word = "CLIMB";
-    const lw = 44 * u;
+    // 1行目(JA=「のぼれ!」/ EN=「CLIMB」): 1文字ずつ時間差でぷよん
+    const ja = currentLang() === "ja";
+    const word = ja ? "のぼれ!" : "CLIMB";
+    const lw = (ja ? 52 : 44) * u;
     const x0 = w / 2 - ((word.length - 1) * lw) / 2;
     const baseY = h * 0.105;
     for (let i = 0; i < word.length; i++) {
@@ -129,7 +135,7 @@ export class HomeScene implements Scene {
       ctx.save();
       ctx.translate(x0 + i * lw, baseY - bounce * 9 * u);
       ctx.rotate(rot);
-      ctx.font = `900 ${50 * u}px ${FONT}`;
+      ctx.font = `900 ${(ja ? 46 : 50) * u}px ${FONT}`;
       // 落ち影 → 縁取り → 白文字
       ctx.fillStyle = "rgba(58,34,96,0.35)";
       ctx.fillText(word[i], 3 * u, 4 * u);
@@ -141,30 +147,39 @@ export class HomeScene implements Scene {
       ctx.restore();
     }
 
-    // 「30」: ゴールドの大きなバッジ風(ゆらゆら)
+    // 2行目(JA=「30びょう」/ EN=「30」): ゴールドのバッジ風(ゆらゆら)
     ctx.save();
     ctx.translate(w / 2, h * 0.195);
     ctx.rotate(-0.06 + Math.sin(this.t * 1.8) * 0.025);
-    ctx.font = `900 ${64 * u}px ${FONT}`;
-    ctx.fillStyle = "rgba(58,34,96,0.35)";
-    ctx.fillText("30", 4 * u, 5 * u);
-    ctx.strokeStyle = "#fff8ef";
-    ctx.lineWidth = 11 * u;
-    ctx.strokeText("30", 0, 0);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 4 * u;
-    ctx.strokeText("30", 0, 0);
-    ctx.fillStyle = COLORS.gold;
-    ctx.fillText("30", 0, 0);
+    const badge = (text: string, px: number, py: number, size: number) => {
+      ctx.font = `900 ${size * u}px ${FONT}`;
+      ctx.fillStyle = "rgba(58,34,96,0.35)";
+      ctx.fillText(text, px + 4 * u, py + 5 * u);
+      ctx.strokeStyle = "#fff8ef";
+      ctx.lineWidth = Math.max(size * 0.17, 6) * u;
+      ctx.strokeText(text, px, py);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = Math.max(size * 0.065, 2.6) * u;
+      ctx.strokeText(text, px, py);
+      ctx.fillStyle = COLORS.gold;
+      ctx.fillText(text, px, py);
+    };
+    if (ja) {
+      badge("30", -54 * u, 0, 58);
+      badge("びょう", 40 * u, 7 * u, 30);
+    } else {
+      badge("30", 0, 0, 64);
+    }
     ctx.restore();
 
     // キャッチコピー
+    const tag = t("tagline");
     ctx.font = `800 ${14 * u}px ${FONT}`;
     ctx.strokeStyle = "rgba(58,34,96,0.55)";
     ctx.lineWidth = 4 * u;
-    ctx.strokeText("30びょうで どこまで のぼれる?", w / 2, h * 0.255);
+    ctx.strokeText(tag, w / 2, h * 0.255);
     ctx.fillStyle = "#fff8ef";
-    ctx.fillText("30びょうで どこまで のぼれる?", w / 2, h * 0.255);
+    ctx.fillText(tag, w / 2, h * 0.255);
   }
 
   // ==================== マスコット ====================
@@ -202,7 +217,7 @@ export class HomeScene implements Scene {
 
     // きせかえボタン(足場の右横)
     this.skinRect = { x: px + pw / 2 + 8 * u, y: platY - 8 * u, w: 82 * u, h: 32 * u };
-    drawButton(ctx, u, this.skinRect, "👕きせかえ", { bg: "#fff8ef", fg: "#5a3a8c", fontPx: 10.5 * u, depth: 3 });
+    drawButton(ctx, u, this.skinRect, t("skinsBtn"), { bg: "#fff8ef", fg: "#5a3a8c", fontPx: 10.5 * u, depth: 3 });
 
     // ぴょんぴょん跳ねるキャラ(本編と同じ見た目を大きく)
     const hop = Math.abs(Math.sin(this.t * 2.3));
@@ -294,13 +309,22 @@ export class HomeScene implements Scene {
     ctx.fillText(nameLabel, w / 2, this.nameRect.y + 15 * u);
 
     if (this.best > 0) {
+      const bestText = `👑 ${t("bestLabel")} ${this.best}m`;
       ctx.font = `900 ${15 * u}px ${FONT}`;
       ctx.strokeStyle = "rgba(58,34,96,0.55)";
       ctx.lineWidth = 4 * u;
-      ctx.strokeText(`👑 ベスト ${this.best}m`, w / 2, h * 0.335);
+      ctx.strokeText(bestText, w / 2, h * 0.335);
       ctx.fillStyle = COLORS.gold;
-      ctx.fillText(`👑 ベスト ${this.best}m`, w / 2, h * 0.335);
+      ctx.fillText(bestText, w / 2, h * 0.335);
     }
+
+    // 左上: 言語切り替え / 右上: 設定
+    this.langRect = { x: 10 * u, y: vp.safeTop + 10 * u, w: 86 * u, h: 30 * u };
+    this.gearRect = { x: w - 46 * u, y: vp.safeTop + 10 * u, w: 36 * u, h: 36 * u };
+    drawButton(ctx, u, this.langRect, t("langPill"), { bg: "rgba(58,34,96,0.55)", fg: "#fff2df", fontPx: 10.5 * u, depth: 2 });
+    ctx.font = `800 ${20 * u}px ${FONT}`;
+    ctx.fillStyle = "rgba(255,242,223,0.9)";
+    ctx.fillText("⚙", this.gearRect.x + 18 * u, this.gearRect.y + 18 * u);
 
     // ボタン(座標は従来のまま。ふわっと浮遊)
     const floatY = Math.sin(this.t * 1.7) * 2 * u;
@@ -310,17 +334,15 @@ export class HomeScene implements Scene {
     this.rankedRect = { x: bx, y: h * 0.6 + 64 * u, w: bw, h: 56 * u };
     ctx.save();
     ctx.translate(0, floatY);
-    drawButton(ctx, u, this.practiceRect, "れんしゅう", { bg: "#43d9a3", fg: "#0c3527", fontPx: 17 * u });
-    drawButton(ctx, u, this.rankedRect, "🌏 ほんばん", { bg: COLORS.accent2, fg: "#fff", fontPx: 19 * u });
+    drawButton(ctx, u, this.practiceRect, t("practice"), { bg: "#43d9a3", fg: "#0c3527", fontPx: 17 * u });
+    drawButton(ctx, u, this.rankedRect, t("ranked"), { bg: COLORS.accent2, fg: "#fff", fontPx: 19 * u });
     ctx.restore();
     // チケット表示(常に1行。レイアウトを固定するため)
     let rowY = this.rankedRect.y + this.rankedRect.h + 12 * u;
     ctx.font = `800 ${10.5 * u}px ${FONT}`;
     ctx.fillStyle = "rgba(255,242,223,0.9)";
     ctx.fillText(
-      this.adFree
-        ? "∞ むせいげんで あそべます"
-        : `🎟 きょう あと ${this.tickets} かい(こうこくで +${TICKETS.AD_REWARD})`,
+      this.adFree ? t("ticketsUnlimited") : t("ticketsLeft", { n: this.tickets, r: TICKETS.AD_REWARD }),
       w / 2,
       rowY,
     );
@@ -328,8 +350,8 @@ export class HomeScene implements Scene {
     const half = (bw - 10 * u) / 2;
     this.rankRect = { x: bx, y: rowY, w: half, h: 44 * u };
     this.storeRect = { x: bx + half + 10 * u, y: rowY, w: half, h: 44 * u };
-    drawButton(ctx, u, this.rankRect, "🏆 ランキング", { bg: "#7a5cc9", fg: "#fff", fontPx: 12.5 * u });
-    drawButton(ctx, u, this.storeRect, "🛒 ストア", { bg: "#f5a03c", fg: "#4a2c00", fontPx: 12.5 * u });
+    drawButton(ctx, u, this.rankRect, t("rankingBtn"), { bg: "#7a5cc9", fg: "#fff", fontPx: 12.5 * u });
+    drawButton(ctx, u, this.storeRect, t("storeBtn"), { bg: "#f5a03c", fg: "#4a2c00", fontPx: 12.5 * u });
     ctx.restore();
   }
 
@@ -350,11 +372,14 @@ export class HomeScene implements Scene {
     } else if (inRect(this.storeRect, x, y)) {
       sfxStart();
       this.app.manager.switchTo(new StoreScene(this.app));
-    } else if (inRect(this.nameRect, x, y)) {
-      const input = window.prompt(`なまえ(${ONLINE.NAME_MAX}もじまで)`, this.name);
-      if (input !== null) {
-        this.name = setPlayerName(input).playerName;
-      }
+    } else if (inRect(this.langRect, x, y)) {
+      sfxStart();
+      const lang = toggleLang();
+      logEvent("lang_change", { lang });
+    } else if (inRect(this.gearRect, x, y) || inRect(this.nameRect, x, y)) {
+      sfxStart();
+      // 名前の変更は設定画面へ集約
+      this.app.manager.switchTo(new SettingsScene(this.app));
     }
   }
 }

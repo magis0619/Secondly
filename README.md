@@ -1,6 +1,7 @@
-# CLIMB 30 ― 30びょうで どこまで のぼれる?
+# のぼれ！30秒 (Climb 30) ― 30びょうで どこまで のぼれる?
 
 左右タップだけで足場を登る、**30秒スコアアタック**のシンプルなゲーム。
+日本語/英語の2言語対応(ホーム左上の🌐で切替。文言は `src/game/i18n.ts` に集約)。
 
 技術スタック: **TypeScript + HTML5 Canvas + Vite**(外部アセット・外部ライブラリゼロ。音はWeb Audio合成、絵はすべてコード描画)。iOSへはCapacitorで書き出し(`docs/ios-setup.md`)。
 
@@ -19,8 +20,9 @@
 
 - **れんしゅう** … 無料でいつでも。記録はローカルランキング(📱)のみ
 - **🌏 ほんばん** … 世界ランキングに挑戦するモード。**1日3回無料**(🎟チケット制)。使い切ったら**広告1回の視聴で+3回**。広告除去購入者は**無制限**。残数はホームに常時表示
-- **🔥 フィーバー** … ノーミスで12回登るとゲージ満タン→5秒間フィーバー。フィーバー中は1ホップごとに**ボーナス+1m**(スコア=たかさ+ボーナス)。ミスで即終了&ゲージリセット
+- **🔥 フィーバー** … ノーミスで12回登るとゲージ満タン→5秒間フィーバー。**足場が中央1本になり、どちらをタップしても登れる(=連打で一気に登る)**。ホップも高速化。終了すると足場は左右に戻る(直後の1段だけは両側OKの猶予)。ミスで即終了&ゲージリセット
 - **👕 きせかえ** … 累計プレイ/ベスト高度/おうえん購入でバンダナを解放(`config.ts`の`SKINS`)。ホームのキャラ横から変更
+- **⚙ せってい** … 名前の変更・言語・プライバシーポリシー・バージョン(ホーム右上)
 
 ```
 ホーム(タイトル+ベスト+名前+[れんしゅう][🌏ほんばん][🏆ランキング][🛒ストア][👕きせかえ])
@@ -81,6 +83,11 @@ service cloud.firestore {
 1. `AD_STUB = false` にして `showNativeAd()` を AdMob インタースティシャル(Capacitorプラグイン `@capacitor-community/admob` 等)に実装
 2. `purchase()` / `restorePurchases()` を StoreKit(`@revenuecat/purchases-capacitor` 等)に実装
 3. App Store Connect に上記4商品を登録(noads=非消耗型、tip系=消耗型)
+
+## 分析(アナリティクス)
+
+`src/game/analytics.ts` の `logEvent()` に集約(開発ビルドはconsole+`window.__analytics`のみ。iOSでのFirebase Analytics接続は `docs/release-checklist.md` 参照)。イベント:
+`app_open` / `play_start{mode}` / `play_end{mode,score,maxCombo,fever}` / `fever_start` / `ad_shown` / `ticket_refill` / `purchase{id}` / `restore` / `ranking_view{tab}` / `name_change` / `skin_select{id}` / `lang_change{lang}`
 
 ## 開発・実行
 

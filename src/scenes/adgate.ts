@@ -1,7 +1,9 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxGo, sfxStart } from "../audio/sfx.ts";
+import { logEvent } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
+import { t } from "../game/i18n.ts";
 import { AD_STUB, STUB_AD_SEC, showNativeAd } from "../game/monetize.ts";
 import { addTickets, getTickets, loadSave, useTicket } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
@@ -45,6 +47,8 @@ export class AdGateScene implements Scene {
   private grantAndStart(): void {
     if (this.started) return;
     this.started = true;
+    logEvent("ad_shown");
+    logEvent("ticket_refill", { n: TICKETS.AD_REWARD });
     addTickets(TICKETS.AD_REWARD);
     useTicket(); // このまま1回ぶん使って開始
     sfxGo();
@@ -73,27 +77,27 @@ export class AdGateScene implements Scene {
       ctx.font = `900 ${30 * u}px ${FONT}`;
       ctx.shadowColor = COLORS.accent2;
       ctx.shadowBlur = 16 * u;
-      ctx.fillText("🌏 ほんばん", w / 2, h * 0.18);
+      ctx.fillText(t("ranked"), w / 2, h * 0.18);
       ctx.shadowBlur = 0;
 
       // チケット切れの表示
       ctx.fillStyle = COLORS.text;
       ctx.font = `800 ${16 * u}px ${FONT}`;
-      ctx.fillText("きょうの むりょうぶんは つかいきった!", w / 2, h * 0.28);
+      ctx.fillText(t("gateUsedUp"), w / 2, h * 0.28);
       ctx.fillStyle = COLORS.textDim;
       ctx.font = `700 ${13 * u}px ${FONT}`;
-      ctx.fillText(`こうこくを 見ると +${TICKETS.AD_REWARD}かい あそべます`, w / 2, h * 0.335);
+      ctx.fillText(t("gateAdInfo", { n: TICKETS.AD_REWARD }), w / 2, h * 0.335);
       // チケットアイコン(からっぽ)
       ctx.font = `800 ${13 * u}px ${FONT}`;
-      ctx.fillText("🎟 のこり 0 かい", w / 2, h * 0.39);
+      ctx.fillText(t("gateNone"), w / 2, h * 0.39);
 
       const bw = 250 * u;
       this.watchRect = { x: w / 2 - bw / 2, y: h * 0.46, w: bw, h: 56 * u };
       this.storeRect = { x: w / 2 - bw / 2, y: h * 0.46 + 72 * u, w: bw, h: 48 * u };
       this.backRect = { x: w / 2 - bw / 2, y: h * 0.46 + 134 * u, w: bw, h: 48 * u };
-      drawButton(ctx, u, this.watchRect, `▶ こうこくを 見て +${TICKETS.AD_REWARD}かい`, { bg: COLORS.accent2, fg: "#fff", fontPx: 15 * u });
-      drawButton(ctx, u, this.storeRect, "🛒 こうこくじょきょ(むせいげん)", { bg: "#25314f", fg: COLORS.text, fontPx: 12.5 * u });
-      drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text, fontPx: 14 * u });
+      drawButton(ctx, u, this.watchRect, t("gateWatch", { n: TICKETS.AD_REWARD }), { bg: COLORS.accent2, fg: "#fff", fontPx: 15 * u });
+      drawButton(ctx, u, this.storeRect, t("gateStore"), { bg: "#25314f", fg: COLORS.text, fontPx: 12.5 * u });
+      drawButton(ctx, u, this.backRect, t("back"), { bg: "#25314f", fg: COLORS.text, fontPx: 14 * u });
     } else {
       // 擬似広告(iOSではここがAdMobリワード広告に置き換わる)
       ctx.fillStyle = "#10131f";
@@ -111,7 +115,7 @@ export class AdGateScene implements Scene {
       const left = Math.max(this.adLeft, 0);
       ctx.fillStyle = COLORS.text;
       ctx.font = `800 ${17 * u}px ${FONT}`;
-      ctx.fillText(`あと ${Math.ceil(left)} びょう`, w / 2, h * 0.48);
+      ctx.fillText(t("adLeft", { n: Math.ceil(left) }), w / 2, h * 0.48);
       const bw = 220 * u;
       ctx.fillStyle = "#25314f";
       ctx.beginPath();
@@ -124,8 +128,8 @@ export class AdGateScene implements Scene {
 
       ctx.fillStyle = COLORS.textDim;
       ctx.font = `700 ${11 * u}px ${FONT}`;
-      ctx.fillText("開発ビルドのため 擬似広告を表示しています", w / 2, h * 0.62);
-      ctx.fillText("(iOS版では ここに実際の広告が入ります)", w / 2, h * 0.62 + 18 * u);
+      ctx.fillText(t("adStubNote1"), w / 2, h * 0.62);
+      ctx.fillText(t("adStubNote2"), w / 2, h * 0.62 + 18 * u);
     }
     ctx.restore();
   }

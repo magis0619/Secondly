@@ -1,4 +1,4 @@
-import { GAME } from "./config.ts";
+import { FEVER, GAME } from "./config.ts";
 
 /** 0=左, 1=右 */
 export type Side = 0 | 1;
@@ -38,6 +38,10 @@ export class Tower {
   private lastCount = GAME.COUNTDOWN + 1;
   private lastTick = GAME.URGENT + 1;
   private run = 1;
+  /** フィーバー: この高さ以上の足場が中央1本になる(-1=無効) */
+  private feverFromH = -1;
+  /** フィーバー終了直後の猶予: この高さへは左右どちらのタップでも登れる(-1=なし) */
+  private graceH = -1;
 
   constructor() {
     this.ensure(8);
@@ -59,16 +63,45 @@ export class Tower {
     }
   }
 
+  /**
+   * フィーバーの切替。ON: 次の段から足場が中央1本(どちらをタップしても登れる)。
+   * OFF: 足場が左右に戻る。復帰直後の1段だけは両側OKの猶予(理不尽ミス防止)。
+   */
+  setFever(on: boolean): void {
+    if (on) {
+      this.feverFromH = this.h + 1;
+      this.graceH = -1;
+    } else if (this.feverFromH >= 0) {
+      this.feverFromH = -1;
+      this.graceH = this.h + 1;
+    }
+  }
+
+  /** h段目の足場が中央(フィーバー)か */
+  isCenter(h: number): boolean {
+    return this.feverFromH >= 0 && h >= this.feverFromH;
+  }
+
+  /** 描画用の列位置(-1=左, 0=中央, +1=右)。地面とフィーバー足場は中央 */
+  col(h: number): number {
+    if (h === 0 || this.isCenter(h)) return 0;
+    return this.side(h) === 0 ? -1 : 1;
+  }
+
   /** 左右タップ。受け付けたらtrue */
   tap(d: Side): boolean {
     if (this.phase !== "play") return false;
     if (this.anim.kind === "fall") return false; // 落下中は操作不能(ペナルティの一部)
     if (this.anim.kind === "hop" && this.anim.t < GAME.HOP_BUFFER) return false;
 
-    if (this.side(this.h + 1) === d) {
+    const next = this.h + 1;
+    const anySide = this.isCenter(next) || next === this.graceH;
+    if (anySide || this.side(next) === d) {
       this.h += 1;
       this.maxH = Math.max(this.maxH, this.h);
-      this.anim = { kind: "hop", t: 0, dur: GAME.HOP_TIME, from: this.h - 1 };
+      if (this.graceH >= 0 && this.h >= this.graceH) this.graceH = -1; // 猶予は1段だけ
+      const dur = this.isCenter(this.h) ? FEVER.HOP_TIME : GAME.HOP_TIME;
+      this.anim = { kind: "hop", t: 0, dur, from: this.h - 1 };
       this.events.push({ type: "hop", h: this.h, side: d });
     } else {
       // 押した側の直近下の足場へ落下(なければ地面h=0)
@@ -144,16 +177,15 @@ export class Tower {
     return this.h;
   }
 
-  /** 描画用: プレイヤーの横位置(-1=左, +1=右, 地面=0) */
+  /** 描画用: プレイヤーの横位置(-1=左, 0=中央, +1=右)。フィーバー中央も反映 */
   visualSide(): number {
-    const sideOf = (h: number): number => (h === 0 ? 0 : this.sides[h] === 0 ? -1 : 1);
     if (this.anim.kind === "hop" || this.anim.kind === "fall") {
       const t = Math.min(this.anim.t / this.anim.dur, 1);
-      const from = sideOf(this.anim.from);
-      const to = sideOf(this.h);
+      const from = this.col(this.anim.from);
+      const to = this.col(this.h);
       return from + (to - from) * t;
     }
-    return sideOf(this.h);
+    return this.col(this.h);
   }
 
   drainEvents(): TowerEvent[] {

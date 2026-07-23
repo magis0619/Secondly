@@ -1,7 +1,9 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
+import { logEvent } from "../game/analytics.ts";
 import { COLORS, LEGAL } from "../game/config.ts";
+import { productDesc, productLabel, t } from "../game/i18n.ts";
 import type { Product } from "../game/monetize.ts";
 import { PRODUCTS, purchase, restorePurchases } from "../game/monetize.ts";
 import type { SaveData } from "../game/save.ts";
@@ -42,12 +44,13 @@ export class StoreScene implements Scene {
     void purchase(p).then((ok) => {
       this.busy = false;
       if (!ok) return;
+      logEvent("purchase", { id: p.id });
       if (p.id === "noads") {
         this.save = setAdFree();
-        this.toast = { text: "こうこくを なくしました! なんどでも ほんばんへ!", t: 2.8 };
+        this.toast = { text: t("noadsToast"), t: 2.8 };
       } else {
         this.save = addSupport();
-        this.toast = { text: "おうえん ありがとう! ⭐", t: 2.8 };
+        this.toast = { text: t("supportToast"), t: 2.8 };
       }
       sfxBest();
     });
@@ -64,7 +67,7 @@ export class StoreScene implements Scene {
     ctx.textAlign = "center";
     ctx.fillStyle = COLORS.text;
     ctx.font = `900 ${26 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("🛒 ストア", w / 2, safeTop + 34 * u);
+    ctx.fillText(t("storeTitle"), w / 2, safeTop + 34 * u);
 
     this.rows = [];
     const cw = 330 * u;
@@ -81,10 +84,10 @@ export class StoreScene implements Scene {
       ctx.textAlign = "left";
       ctx.fillStyle = COLORS.text;
       ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(p.label, rect.x + 14 * u, rect.y + 20 * u);
+      ctx.fillText(productLabel(p.id, p.label), rect.x + 14 * u, rect.y + 20 * u);
       ctx.fillStyle = COLORS.textDim;
       ctx.font = `700 ${10.5 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(p.desc, rect.x + 14 * u, rect.y + ch - 16 * u);
+      ctx.fillText(productDesc(p.id, p.desc), rect.x + 14 * u, rect.y + ch - 16 * u);
       // 価格ピル
       const pw = 76 * u;
       const pr: Rect = { x: rect.x + rect.w - pw - 12 * u, y: rect.y + ch / 2 - 16 * u, w: pw, h: 32 * u };
@@ -92,7 +95,7 @@ export class StoreScene implements Scene {
         ctx.textAlign = "center";
         ctx.fillStyle = "#6fdc8c";
         ctx.font = `800 ${12 * u}px -apple-system, system-ui, sans-serif`;
-        ctx.fillText("✓ ずみ", pr.x + pr.w / 2, pr.y + pr.h / 2);
+        ctx.fillText(t("owned"), pr.x + pr.w / 2, pr.y + pr.h / 2);
       } else {
         drawButton(ctx, u, pr, p.price, { bg: COLORS.gold, fg: "#3a2c00", fontPx: 12.5 * u });
       }
@@ -107,7 +110,7 @@ export class StoreScene implements Scene {
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;
     y += 8 * u;
-    ctx.fillText("― かいはつしゃを おうえん(なんどでも)―", w / 2, y + 6 * u);
+    ctx.fillText(t("supportHeader"), w / 2, y + 6 * u);
     y += 22 * u;
     for (let i = 1; i < PRODUCTS.length; i++) card(PRODUCTS[i], 56 * u, false);
 
@@ -115,7 +118,7 @@ export class StoreScene implements Scene {
       ctx.textAlign = "center";
       ctx.fillStyle = COLORS.gold;
       ctx.font = `700 ${12 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText(`これまでの おうえん: ${this.save.supporter}かい ⭐ ありがとう!`, w / 2, y + 8 * u);
+      ctx.fillText(t("supportCount", { n: this.save.supporter }), w / 2, y + 8 * u);
       y += 24 * u;
     }
 
@@ -124,21 +127,21 @@ export class StoreScene implements Scene {
     this.restoreRect = { x: w / 2 - 120 * u, y: y + 6 * u, w: 240 * u, h: 30 * u };
     ctx.fillStyle = COLORS.textDim;
     ctx.font = `700 ${11 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("こうにゅうを ふっこうする(リストア)", w / 2, this.restoreRect.y + 15 * u);
+    ctx.fillText(t("restore"), w / 2, this.restoreRect.y + 15 * u);
     ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText("※ 開発ビルドでは擬似購入です(実際の請求はありません)", w / 2, this.restoreRect.y + 40 * u);
+    ctx.fillText(t("devPurchaseNote"), w / 2, this.restoreRect.y + 40 * u);
     // プライバシーポリシー(URL設定時のみ。広告/課金ありアプリの審査必須要件)
     if (LEGAL.privacyUrl) {
       this.privacyRect = { x: w / 2 - 120 * u, y: this.restoreRect.y + 54 * u, w: 240 * u, h: 26 * u };
       ctx.fillStyle = COLORS.accent;
       ctx.font = `700 ${11 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.fillText("プライバシーポリシー ↗", w / 2, this.privacyRect.y + 13 * u);
+      ctx.fillText(t("privacy"), w / 2, this.privacyRect.y + 13 * u);
     } else {
       this.privacyRect = { x: 0, y: 0, w: 0, h: 0 };
     }
 
     this.backRect = { x: w / 2 - 100 * u, y: h - safeBottom - 76 * u, w: 200 * u, h: 50 * u };
-    drawButton(ctx, u, this.backRect, "もどる", { bg: "#25314f", fg: COLORS.text });
+    drawButton(ctx, u, this.backRect, t("back"), { bg: "#25314f", fg: COLORS.text });
 
     // トースト
     if (this.toast) {
@@ -166,9 +169,10 @@ export class StoreScene implements Scene {
       }
     }
     if (inRect(this.restoreRect, x, y)) {
+      logEvent("restore");
       void restorePurchases().then((ids) => {
         if (ids.includes("noads")) this.save = setAdFree();
-        this.toast = { text: ids.length > 0 ? "ふっこう しました!" : "ふっこうする こうにゅうは ありません", t: 2.2 };
+        this.toast = { text: ids.length > 0 ? t("restoreDone") : t("restoreNone"), t: 2.2 };
       });
       return;
     }

@@ -33,6 +33,8 @@ export interface SaveData {
   ticketDate: string;
   /** 選択中のきせかえID(config.SKINS) */
   skin: string;
+  /** 言語("ja"|"en"。空なら端末言語から自動判定) */
+  lang: string;
 }
 
 const DEFAULTS: SaveData = {
@@ -48,6 +50,7 @@ const DEFAULTS: SaveData = {
   tickets: 0,
   ticketDate: "",
   skin: "pink",
+  lang: "",
 };
 
 export function loadSave(): SaveData {
@@ -78,8 +81,8 @@ function store(data: SaveData): void {
   }
 }
 
-/** 初回起動時に匿名IDと名前を用意する(既にあればそのまま返す) */
-export function ensureIdentity(): SaveData {
+/** 初回起動時に匿名IDと名前を用意する(既にあればそのまま返す)。prefixは言語別の初期名 */
+export function ensureIdentity(namePrefix = "ノボラー"): SaveData {
   const save = loadSave();
   let changed = false;
   if (!save.playerId) {
@@ -90,11 +93,17 @@ export function ensureIdentity(): SaveData {
     changed = true;
   }
   if (!save.playerName) {
-    save.playerName = `ノボラー${1000 + Math.floor(Math.random() * 9000)}`;
+    save.playerName = `${namePrefix}${1000 + Math.floor(Math.random() * 9000)}`;
     changed = true;
   }
   if (changed) store(save);
   return save;
+}
+
+export function setLangPref(lang: string): void {
+  const save = loadSave();
+  save.lang = lang;
+  store(save);
 }
 
 export function setPlayerName(name: string): SaveData {
