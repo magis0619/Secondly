@@ -22,9 +22,9 @@ export interface Product {
 }
 
 export const PRODUCTS: Product[] = [
-  { id: "noads", label: "🚫 こうこく じょきょ", price: "¥480", desc: "ほんばん前の こうこくが なくなる(かいきり)" },
-  { id: "tip_s", label: "☕ おうえん(小)", price: "¥160", desc: "かいはつしゃに コーヒーを おごる" },
-  { id: "tip_m", label: "🍱 おうえん(中)", price: "¥480", desc: "かいはつしゃに おべんとうを おごる" },
+  { id: "noads", label: "🚫 こうこく じょきょ", price: "¥500", desc: "ほんばん前の こうこくが なくなる(かいきり)" },
+  { id: "tip_s", label: "☕ おうえん(小)", price: "¥200", desc: "かいはつしゃに コーヒーを おごる" },
+  { id: "tip_m", label: "🍱 おうえん(中)", price: "¥500", desc: "かいはつしゃに おべんとうを おごる" },
   { id: "tip_l", label: "🎉 おうえん(大)", price: "¥1,200", desc: "かいはつしゃが とても よろこぶ" },
 ];
 
