@@ -8,6 +8,7 @@
  * 価格表示はストアから取得した実価格に置き換えること(PRODUCTSのpriceは仮、docs/release-checklist.md参照)。
  */
 import { AdMob } from "@capacitor-community/admob";
+import { InAppReview } from "@capacitor-community/in-app-review";
 import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 
 export type ProductId = "noads" | "tip_s" | "tip_m" | "tip_l";
@@ -97,11 +98,14 @@ export async function restorePurchases(): Promise<ProductId[]> {
 }
 
 /**
- * ストアレビューを促す(SKStoreReviewController相当)。スタブはNo-op。
- * iOS化: @capacitor-community/in-app-review 等に差し替える(docs/release-checklist.md参照)。
- * ネイティブのレビューAPIは呼び出し回数に自動で上限がかかる(年数回)ため、
+ * ストアレビューを促す(SKStoreReviewController相当)。
+ * ネイティブのレビューAPI自体にも呼び出し回数の上限がかかる(年数回)ため、
  * 呼び出し側の頻度調整(result.tsの節目プレイのみ)と合わせて二重に乱発を防いでいる。
  */
 export async function requestReview(): Promise<void> {
-  // TODO(iOS): await InAppReview.requestReview()
+  try {
+    await InAppReview.requestReview();
+  } catch {
+    // 非対応環境は無視
+  }
 }

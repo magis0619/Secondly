@@ -13,7 +13,10 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.2"),
         .package(name: "CapacitorCommunityAdmob", path: "../../../node_modules/@capacitor-community/admob"),
+        .package(name: "CapacitorCommunityInAppReview", path: "../../../node_modules/@capacitor-community/in-app-review"),
         .package(name: "CapacitorFirebaseAnalytics", path: "../../../node_modules/@capacitor-firebase/analytics"),
+        .package(name: "CapacitorHaptics", path: "../../../node_modules/@capacitor/haptics"),
+        .package(name: "CapacitorLocalNotifications", path: "../../../node_modules/@capacitor/local-notifications"),
         .package(name: "RevenuecatPurchasesCapacitor", path: "../../../node_modules/@revenuecat/purchases-capacitor")
     ],
     targets: [
@@ -23,7 +26,10 @@ let package = Package(
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
                 .product(name: "CapacitorCommunityAdmob", package: "CapacitorCommunityAdmob"),
+                .product(name: "CapacitorCommunityInAppReview", package: "CapacitorCommunityInAppReview"),
                 .product(name: "CapacitorFirebaseAnalytics", package: "CapacitorFirebaseAnalytics"),
+                .product(name: "CapacitorHaptics", package: "CapacitorHaptics"),
+                .product(name: "CapacitorLocalNotifications", package: "CapacitorLocalNotifications"),
                 .product(name: "RevenuecatPurchasesCapacitor", package: "RevenuecatPurchasesCapacitor")
             ]
         )

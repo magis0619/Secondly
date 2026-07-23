@@ -16,6 +16,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		5FAC7BE3A3C5ABD6B0C9E909 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 4B159AF4CE9418EB1B02DA88 /* InfoPlist.strings */; };
+		89FF1A62D9D6FF1828F9B434 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 8172074B282CF55ED6FFA023 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +32,7 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		8172074B282CF55ED6FFA023 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +74,7 @@
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
 				504EC3131FED79650016851F /* Info.plist */,
 				4B159AF4CE9418EB1B02DA88 /* InfoPlist.strings */,
+				8172074B282CF55ED6FFA023 /* GoogleService-Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
@@ -146,6 +149,7 @@
 			files = (
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				5FAC7BE3A3C5ABD6B0C9E909 /* InfoPlist.strings in Resources */,
+				89FF1A62D9D6FF1828F9B434 /* GoogleService-Info.plist in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
