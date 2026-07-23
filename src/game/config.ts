@@ -89,8 +89,8 @@ export const ZONE_BLEND = 8;
  * ホップも速くなる(HOP_TIME)。スコアボーナスはなし(高さがそのまま伸びる)。
  */
 export const FEVER = {
-  REQ: 12,
-  TIME: 5,
+  REQ: 20,
+  TIME: 4,
   HOP_TIME: 0.09,
 } as const;
 
