@@ -32,11 +32,13 @@ export function drawIconLabel(ctx: CanvasRenderingContext2D, cx: number, y: numb
   }
   const [, icon, text] = m;
   const textW = ctx.measureText(text).width;
+  // ✏️(U+270F+U+FE0F)のようなVS16昇格絵文字は、canvasが細いテキスト字幅で位置決めしつつ
+  // 実際は幅広のカラー絵文字を描くため、textAlign="right"だと本文に右へはみ出して重なる。
+  // ネイティブ絵文字(🌐)の実描画幅を基準スロットにして中央基準で置くと、VS16でもはみ出さない。
+  const slotW = ctx.measureText("🌐").width;
   ctx.textAlign = "center";
   ctx.fillText(text, cx, y);
-  ctx.textAlign = "right";
-  ctx.fillText(icon, cx - textW / 2 - gap, y);
-  ctx.textAlign = "center";
+  ctx.fillText(icon, cx - textW / 2 - gap - slotW / 2, y);
 }
 
 /** #rrggbb を暗く/明るくする(ボタンの厚み用) */
