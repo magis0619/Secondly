@@ -11,6 +11,7 @@ import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { startRanked } from "./adgate.ts";
 import { GameScene } from "./game.ts";
+import { HowToModal } from "./howto.ts";
 import { RankingScene } from "./ranking.ts";
 import { SettingsScene } from "./settings.ts";
 import { SkinsScene } from "./skins.ts";
@@ -38,8 +39,11 @@ export class HomeScene implements Scene {
   private nameRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private gearRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private langRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private howto: HowToModal;
 
-  constructor(private app: App) {}
+  constructor(private app: App) {
+    this.howto = new HowToModal(app);
+  }
 
   enter(): void {
     setBgm("menu");
@@ -50,10 +54,12 @@ export class HomeScene implements Scene {
     this.supporter = save.supporter;
     this.skin = save.skin;
     this.tickets = getTickets(TICKETS.DAILY);
+    if (!save.seenHowto) this.howto.show(); // 初回起動時だけ自動で開く
   }
 
   update(dt: number): void {
     this.t += dt;
+    this.howto.update(dt);
   }
 
   // ==================== 背景 ====================
@@ -355,9 +361,11 @@ export class HomeScene implements Scene {
     drawButton(ctx, u, this.rankRect, t("rankingBtn"), { bg: "#7a5cc9", fg: "#fff", fontPx: 12.5 * u });
     drawButton(ctx, u, this.storeRect, t("storeBtn"), { bg: "#f5a03c", fg: "#4a2c00", fontPx: 12.5 * u });
     ctx.restore();
+    this.howto.draw(ctx);
   }
 
   onUp(x: number, y: number): void {
+    if (this.howto.onUp(x, y)) return;
     if (inRect(this.practiceRect, x, y)) {
       sfxStart();
       this.app.manager.switchTo(new GameScene(this.app, "practice"));

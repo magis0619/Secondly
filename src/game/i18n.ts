@@ -99,6 +99,15 @@ const JA = {
   rankBig1: "👑 だい1い!!",
   rankBig2: "だい2い!!",
   rankBig3: "だい3い!!",
+  howtoTitle: "📖 あそびかた",
+  howto1: "画面の左右を タップして\nあしばを のぼろう",
+  howto2: "つぎの あしばが ある側を\nタップ!",
+  howto3: "まちがえると 落ちてしまう",
+  howto4: "せいげん時間は 30びょう",
+  howto5: "12れんぞく成功で フィーバー!\n連打で 一気に のぼれる",
+  howto6: "ほんばんで せかいランキングに\nちょうせん(1日3かい むりょう)",
+  howtoRow: "❓ あそびかた",
+  close: "とじる",
 };
 
 const EN: Record<keyof typeof JA, string> = {
@@ -171,6 +180,15 @@ const EN: Record<keyof typeof JA, string> = {
   rankBig1: "👑 1ST PLACE!!",
   rankBig2: "2ND PLACE!!",
   rankBig3: "3RD PLACE!!",
+  howtoTitle: "📖 How to Play",
+  howto1: "Tap left or right\nto climb the steps",
+  howto2: "Tap the side where\nthe next step is!",
+  howto3: "Miss, and you fall",
+  howto4: "You have 30 seconds",
+  howto5: "12 in a row triggers Fever!\nMash to climb fast",
+  howto6: "Ranked mode: challenge the\nworld (3 free plays/day)",
+  howtoRow: "❓ How to Play",
+  close: "Close",
 };
 
 export type TKey = keyof typeof JA;

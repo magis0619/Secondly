@@ -9,15 +9,19 @@ import { loadSave, setPlayerName } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { HomeScene } from "./home.ts";
+import { HowToModal } from "./howto.ts";
 
-/** ⚙ 設定: 名前変更 / 言語 / プライバシーポリシー / バージョン */
+/** ⚙ 設定: 名前変更 / 言語 / あそびかた / プライバシーポリシー / バージョン */
 export class SettingsScene implements Scene {
   private t = 0;
   private name = "";
   private rows: { rect: Rect; action: () => void; label: () => string; sub?: () => string }[] = [];
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private howto: HowToModal;
 
-  constructor(private app: App) {}
+  constructor(private app: App) {
+    this.howto = new HowToModal(app);
+  }
 
   enter(): void {
     setBgm("menu");
@@ -26,6 +30,7 @@ export class SettingsScene implements Scene {
 
   update(dt: number): void {
     this.t += dt;
+    this.howto.update(dt);
   }
 
   private buildRows(): void {
@@ -56,6 +61,10 @@ export class SettingsScene implements Scene {
         const lang = toggleLang();
         logEvent("lang_change", { lang });
       },
+    );
+    add(
+      () => t("howtoRow"),
+      () => this.howto.show(),
     );
     if (LEGAL.privacyUrl) {
       add(
@@ -104,9 +113,11 @@ export class SettingsScene implements Scene {
     this.backRect = { x: w / 2 - 100 * u, y: h - safeBottom - 76 * u, w: 200 * u, h: 50 * u };
     drawButton(ctx, u, this.backRect, t("back"), { bg: "#25314f", fg: COLORS.text });
     ctx.restore();
+    this.howto.draw(ctx);
   }
 
   onUp(x: number, y: number): void {
+    if (this.howto.onUp(x, y)) return;
     for (const r of this.rows) {
       if (inRect(r.rect, x, y)) {
         sfxStart();

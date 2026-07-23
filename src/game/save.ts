@@ -35,6 +35,8 @@ export interface SaveData {
   skin: string;
   /** 言語("ja"|"en"。空なら端末言語から自動判定) */
   lang: string;
+  /** 「あそびかた」を一度でも閉じたか(初回起動ポップの表示判定) */
+  seenHowto: boolean;
 }
 
 const DEFAULTS: SaveData = {
@@ -51,6 +53,7 @@ const DEFAULTS: SaveData = {
   ticketDate: "",
   skin: "pink",
   lang: "",
+  seenHowto: false,
 };
 
 export function loadSave(): SaveData {
@@ -103,6 +106,14 @@ export function ensureIdentity(namePrefix = "ノボラー"): SaveData {
 export function setLangPref(lang: string): void {
   const save = loadSave();
   save.lang = lang;
+  store(save);
+}
+
+/** 「あそびかた」を閉じた(=見た)ことを記録。次回以降は自動表示しない */
+export function markHowtoSeen(): void {
+  const save = loadSave();
+  if (save.seenHowto) return;
+  save.seenHowto = true;
   store(save);
 }
 
