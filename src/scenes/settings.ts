@@ -13,7 +13,7 @@ import { HomeScene } from "./home.ts";
 export class SettingsScene implements Scene {
   private t = 0;
   private name = "";
-  private rows: { rect: Rect; action: () => void; label: () => string }[] = [];
+  private rows: { rect: Rect; action: () => void; label: () => string; sub?: () => string }[] = [];
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(private app: App) {}
@@ -31,14 +31,14 @@ export class SettingsScene implements Scene {
     void h;
     this.rows = [];
     const rw = 300 * u;
-    const rh = 54 * u;
     let y = safeTop + 90 * u;
-    const add = (label: () => string, action: () => void) => {
-      this.rows.push({ rect: { x: w / 2 - rw / 2, y, w: rw, h: rh }, action, label });
+    const add = (label: () => string, action: () => void, sub?: () => string) => {
+      const rh = (sub ? 66 : 54) * u;
+      this.rows.push({ rect: { x: w / 2 - rw / 2, y, w: rw, h: rh }, action, label, sub });
       y += rh + 14 * u;
     };
     add(
-      () => `${t("changeName")}(${this.name})`,
+      () => t("changeName"),
       () => {
         const input = window.prompt(t("namePrompt", { n: ONLINE.NAME_MAX }), this.name);
         if (input !== null) {
@@ -46,6 +46,7 @@ export class SettingsScene implements Scene {
           logEvent("name_change");
         }
       },
+      () => this.name, // 現在の名前は2行目に表示(長い名前でも崩れない)
     );
     add(
       () => t("languageRow"),
@@ -83,7 +84,14 @@ export class SettingsScene implements Scene {
       ctx.fill();
       ctx.fillStyle = COLORS.text;
       ctx.font = `800 ${13.5 * u}px ${FONT}`;
-      ctx.fillText(r.label(), r.rect.x + r.rect.w / 2, r.rect.y + r.rect.h / 2);
+      if (r.sub) {
+        ctx.fillText(r.label(), r.rect.x + r.rect.w / 2, r.rect.y + 22 * u);
+        ctx.fillStyle = COLORS.textDim;
+        ctx.font = `700 ${11.5 * u}px ${FONT}`;
+        ctx.fillText(r.sub(), r.rect.x + r.rect.w / 2, r.rect.y + 46 * u);
+      } else {
+        ctx.fillText(r.label(), r.rect.x + r.rect.w / 2, r.rect.y + r.rect.h / 2);
+      }
     }
 
     // バージョン

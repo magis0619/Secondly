@@ -14,6 +14,9 @@ import { onlineEnabled, syncBest } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
 import { drawFx } from "../render/fx.ts";
+import type { Rect } from "../render/ui.ts";
+import { FONT, drawButton, inRect } from "../render/ui.ts";
+import { HomeScene } from "./home.ts";
 import type { SyncStatus } from "./result.ts";
 import { ResultScene } from "./result.ts";
 
@@ -87,6 +90,11 @@ export class GameScene implements Scene {
   private feverCount = 0;
   private skin = "pink";
   private trailAcc = 0;
+  /** ホームへ戻る確認ポップアップ(表示中はゲーム全体を一時停止) */
+  private confirmOpen = false;
+  private homeRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private resumeRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private quitRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor(
     private app: App,
@@ -128,6 +136,7 @@ export class GameScene implements Scene {
 
   update(dt: number): void {
     this.t += dt;
+    if (this.confirmOpen) return; // ポップアップ中は完全一時停止(タイマーも止まる)
     const { vp, input } = this.app;
     this.juice.update(dt, 7 * vp.unit);
     this.goFlash = Math.max(this.goFlash - dt, 0);
@@ -184,11 +193,12 @@ export class GameScene implements Scene {
           // 踏み切り: 砂ぼこり+リング
           this.fx.burst(x, y, "#c9d6ff", 7, 100 * u, 3 * u);
           this.fx.ring(x, y, this.feverT > 0 ? COLORS.gold : "rgba(255,255,255,0.8)", 26 * u, 2 * u, 0.28);
-          // フィーバーコンボ(発動で足場が中央1本になり、連打で登れる)
-          this.combo++;
+          // フィーバーコンボ(発動で足場が中央1本になり、連打で登れる)。
+          // 中央足場でのホップはゲージに数えない(フィーバー中に溜まって即再発動するのを防ぐ)
+          if (!this.tower.isCenter(ev.h)) this.combo++;
           this.maxCombo = Math.max(this.maxCombo, this.combo);
           if (this.feverT <= 0 && this.combo >= FEVER.REQ) {
-            this.combo = 0; // 次のフィーバーはまた0から溜め直し(終了直後の即再発動を防ぐ)
+            this.combo = 0; // 次のフィーバーはまた0から溜め直し
             this.feverT = FEVER.TIME;
             this.feverCount++;
             this.tower.setFever(true);
@@ -677,19 +687,6 @@ export class GameScene implements Scene {
       }
     }
 
-    // その先は見えない。合図はゆっくり明滅する「???」だけ
-    // (以前あった霞バンドは横方向の灰色の線に見えるため廃止)
-    const fogY = anchorY + (this.camH - (visTop + 1.55)) * stepH;
-    if (fogY > -40 * u) {
-      ctx.fillStyle = COLORS.textDim;
-      ctx.globalAlpha = 0.3 + 0.18 * Math.sin(this.t * 1.6);
-      ctx.font = `800 ${14 * u}px -apple-system, system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("? ? ?", w / 2, Math.max(fogY - 30 * u, safeTop + 96 * u));
-      ctx.globalAlpha = 1;
-    }
-
     this.drawClimber(ctx);
     drawFx(ctx, vp, this.fx);
     ctx.restore();
@@ -758,6 +755,21 @@ export class GameScene implements Scene {
     ctx.font = `800 ${18 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(`${Math.max(this.best, tw.maxH)}m`, w - 16 * u, by + 13 * u);
 
+    // ホームへ戻るボタン(たかさ表示の下、半透明)
+    if (tw.phase !== "done") {
+      this.homeRect = { x: 12 * u, y: by + 44 * u, w: 40 * u, h: 40 * u };
+      ctx.fillStyle = "rgba(20,28,50,0.5)";
+      ctx.beginPath();
+      ctx.arc(this.homeRect.x + 20 * u, this.homeRect.y + 20 * u, 20 * u, 0, TAU);
+      ctx.fill();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `800 ${18 * u}px ${FONT}`;
+      ctx.fillText("🏠", this.homeRect.x + 20 * u, this.homeRect.y + 21 * u);
+    } else {
+      this.homeRect = { x: 0, y: 0, w: 0, h: 0 };
+    }
+
     // マイルストーンバナー
     if (this.banner) {
       const a = clamp(this.banner.t / 0.3, 0, 1) * clamp((1.6 - this.banner.t) / 0.25, 0, 1);
@@ -819,9 +831,50 @@ export class GameScene implements Scene {
       ctx.fillRect(0, 0, w, H);
       ctx.globalAlpha = 1;
     }
+
+    // ホームへ戻る確認ポップアップ(最前面)
+    if (this.confirmOpen) {
+      ctx.fillStyle = "rgba(5,8,18,0.65)";
+      ctx.fillRect(0, 0, w, H);
+      const cw = 300 * u;
+      const chh = 190 * u;
+      const cx0 = w / 2 - cw / 2;
+      const cy0 = H * 0.5 - chh / 2;
+      ctx.fillStyle = "#1c2743";
+      ctx.beginPath();
+      ctx.roundRect(cx0, cy0, cw, chh, 18 * u);
+      ctx.fill();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = COLORS.text;
+      ctx.font = `900 ${19 * u}px ${FONT}`;
+      ctx.fillText(t("confirmQuit"), w / 2, cy0 + 44 * u);
+      ctx.fillStyle = COLORS.textDim;
+      ctx.font = `700 ${12 * u}px ${FONT}`;
+      ctx.fillText(t("confirmQuitSub"), w / 2, cy0 + 74 * u);
+      const bw2 = (cw - 42 * u) / 2;
+      this.resumeRect = { x: cx0 + 14 * u, y: cy0 + chh - 66 * u, w: bw2, h: 48 * u };
+      this.quitRect = { x: cx0 + 28 * u + bw2, y: cy0 + chh - 66 * u, w: bw2, h: 48 * u };
+      drawButton(ctx, u, this.resumeRect, t("resume"), { bg: COLORS.accent, fontPx: 14 * u });
+      drawButton(ctx, u, this.quitRect, t("toHome"), { bg: "#3a4666", fg: COLORS.text, fontPx: 14 * u });
+    }
   }
 
   onDown(x: number, y: number): void {
+    // ポップアップ表示中はその操作だけを受け付ける
+    if (this.confirmOpen) {
+      if (inRect(this.resumeRect, x, y)) {
+        this.confirmOpen = false;
+      } else if (inRect(this.quitRect, x, y)) {
+        this.app.manager.switchTo(new HomeScene(this.app));
+      }
+      return;
+    }
+    // 🏠ボタン: 確認ポップアップを開く(左右タップとしては扱わない)
+    if (this.tower.phase !== "done" && inRect(this.homeRect, x, y)) {
+      this.confirmOpen = true;
+      return;
+    }
     // タップ波紋
     this.fx.ring(x - this.juice.offX, y - this.juice.offY, COLORS.accent, 24 * this.app.vp.unit, 2 * this.app.vp.unit, 0.3);
     this.tap(x < this.app.vp.w / 2 ? 0 : 1);

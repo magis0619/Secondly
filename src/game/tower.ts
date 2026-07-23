@@ -40,8 +40,10 @@ export class Tower {
   private run = 1;
   /** フィーバー: この高さ以上の足場が中央1本になる(-1=無効) */
   private feverFromH = -1;
-  /** フィーバー終了直後の猶予: この高さへは左右どちらのタップでも登れる(-1=なし) */
-  private graceH = -1;
+  /** フィーバー中はtrue。falseでもcenterUntilまでは中央足場が残る */
+  private feverActive = false;
+  /** フィーバー終了後も中央のまま残す上限の高さ(見えている足場を維持するため) */
+  private centerUntil = -1;
 
   constructor() {
     this.ensure(8);
@@ -65,21 +67,23 @@ export class Tower {
 
   /**
    * フィーバーの切替。ON: 次の段から足場が中央1本(どちらをタップしても登れる)。
-   * OFF: 足場が左右に戻る。復帰直後の1段だけは両側OKの猶予(理不尽ミス防止)。
+   * OFF: 見えている中央足場(h+2まで)はそのまま残し、その先から左右に分岐する。
    */
   setFever(on: boolean): void {
     if (on) {
+      this.feverActive = true;
       this.feverFromH = this.h + 1;
-      this.graceH = -1;
-    } else if (this.feverFromH >= 0) {
-      this.feverFromH = -1;
-      this.graceH = this.h + 1;
+      this.centerUntil = -1;
+    } else if (this.feverActive) {
+      this.feverActive = false;
+      this.centerUntil = this.h + 2;
     }
   }
 
   /** h段目の足場が中央(フィーバー)か */
   isCenter(h: number): boolean {
-    return this.feverFromH >= 0 && h >= this.feverFromH;
+    if (this.feverFromH < 0 || h < this.feverFromH) return false;
+    return this.feverActive || h <= this.centerUntil;
   }
 
   /** 描画用の列位置(-1=左, 0=中央, +1=右)。地面とフィーバー足場は中央 */
@@ -95,21 +99,29 @@ export class Tower {
     if (this.anim.kind === "hop" && this.anim.t < GAME.HOP_BUFFER) return false;
 
     const next = this.h + 1;
-    const anySide = this.isCenter(next) || next === this.graceH;
-    if (anySide || this.side(next) === d) {
+    if (this.isCenter(next) || this.side(next) === d) {
       this.h += 1;
       this.maxH = Math.max(this.maxH, this.h);
-      if (this.graceH >= 0 && this.h >= this.graceH) this.graceH = -1; // 猶予は1段だけ
+      // 中央地帯を抜けたら通常状態へ戻す
+      if (!this.feverActive && this.feverFromH >= 0 && this.h > this.centerUntil) {
+        this.feverFromH = -1;
+        this.centerUntil = -1;
+      }
       const dur = this.isCenter(this.h) ? FEVER.HOP_TIME : GAME.HOP_TIME;
       this.anim = { kind: "hop", t: 0, dur, from: this.h - 1 };
       this.events.push({ type: "hop", h: this.h, side: d });
     } else {
-      // 押した側の直近下の足場へ落下(なければ地面h=0)
+      // 押した側の直近下の足場へ落下(なければ地面h=0)。
+      // ただし中央足場の上にいる時(フィーバー終了の境界)は落ちず、その場でミス動作だけ
       let to = 0;
-      for (let k = this.h; k >= 1; k--) {
-        if (this.sides[k] === d) {
-          to = k;
-          break;
+      if (this.isCenter(this.h)) {
+        to = this.h;
+      } else {
+        for (let k = this.h; k >= 1; k--) {
+          if (this.sides[k] === d) {
+            to = k;
+            break;
+          }
         }
       }
       const dist = this.h + 1 - to;

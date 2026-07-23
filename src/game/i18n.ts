@@ -93,6 +93,9 @@ const JA = {
   version: "バージョン",
   defaultNamePrefix: "ノボラー",
   purchaseConfirm: "【開発ビルドの擬似購入】\n{label} {price}\n実際の請求はありません。購入しますか?",
+  confirmQuit: "ホームに もどる?",
+  confirmQuitSub: "この きろくは のこりません",
+  resume: "つづける",
 };
 
 const EN: Record<keyof typeof JA, string> = {
@@ -159,6 +162,9 @@ const EN: Record<keyof typeof JA, string> = {
   version: "Version",
   defaultNamePrefix: "Climber",
   purchaseConfirm: "[Dev build: simulated purchase]\n{label} {price}\nNo real charge. Buy?",
+  confirmQuit: "Return home?",
+  confirmQuitSub: "This run won't be saved",
+  resume: "Keep going",
 };
 
 export type TKey = keyof typeof JA;
