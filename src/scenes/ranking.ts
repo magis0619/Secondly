@@ -6,7 +6,7 @@ import { logEvent } from "../game/analytics.ts";
 import { COLORS } from "../game/config.ts";
 import { t } from "../game/i18n.ts";
 import type { WorldEntry } from "../game/online.ts";
-import { fetchTop, onlineEnabled, syncBest } from "../game/online.ts";
+import { fetchMyRank, fetchTop, onlineEnabled, syncBest } from "../game/online.ts";
 import type { SaveData } from "../game/save.ts";
 import { ensureIdentity } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
@@ -21,6 +21,8 @@ export class RankingScene implements Scene {
   private tab: Tab = "local";
   private world: WorldEntry[] | null = null;
   private worldState: "idle" | "loading" | "ok" | "error" = "idle";
+  /** TOP_N圏外の時の自分の順位(1始まり)。取得前/対象外はnull */
+  private myRank: number | null = null;
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private tabRects: { rect: Rect; tab: Tab }[] = [];
 
@@ -43,14 +45,22 @@ export class RankingScene implements Scene {
   private loadWorld(): void {
     this.worldState = "loading";
     // 未送信のほんばんベストがあれば先に送信してから取得(旧セーブもここで自動送信される)
+    this.myRank = null;
     void syncBest()
       .then(() => fetchTop())
       .then((list) => {
         if (list === null) {
           this.worldState = "error";
-        } else {
-          this.world = list;
-          this.worldState = "ok";
+          return;
+        }
+        this.world = list;
+        this.worldState = "ok";
+        // TOP_N圏外なら別途、自分の順位だけ集計クエリで取得する
+        const inTop = list.some((e) => e.id === this.save.playerId);
+        if (!inTop && this.save.rankedBest > 0) {
+          void fetchMyRank(this.save.rankedBest).then((r) => {
+            this.myRank = r;
+          });
         }
       });
   }
@@ -118,6 +128,15 @@ export class RankingScene implements Scene {
         this.world.slice(0, maxRows).forEach((e, i) => {
           this.drawRow(ctx, listTop + i * rowH, i + 1, e.name, e.score, e.id === this.save.playerId, "");
         });
+        // TOP_N圏外でも自分の順位が分かるよう、リスト下に固定表示する
+        if (this.myRank !== null) {
+          const y = h - safeBottom - 118 * u;
+          ctx.fillStyle = COLORS.textDim;
+          ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(t("yourRankLabel"), w / 2, y - 20 * u);
+          this.drawRow(ctx, y, this.myRank, this.save.playerName, this.save.rankedBest, true, "");
+        }
       }
     }
 

@@ -148,6 +148,8 @@ export const ONLINE = {
   apiKey: "AIzaSyAXuC6n6oFKJGVnJY0aTD7L5qAHbGF6oUk", // FirebaseコンソールのウェブAPIキー
   collection: "scores",
   TOP_N: 50,
-  MAX_SCORE: 1000,
+  // 理論上の最速連打でも30秒で300段強が限度。1000のままだと改ざん値が紛れ込みやすいため
+  // 実際に届きうる上限より少し余裕を持たせた400に制限する(Firestoreルールも合わせて更新すること)。
+  MAX_SCORE: 400,
   NAME_MAX: 12,
 };

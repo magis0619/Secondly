@@ -41,6 +41,15 @@
 
 - BGM 3曲(`src/audio/bgm.ts` のステップシーケンサ): メニュー(ゆったり)/登り中(軽快)/フィーバー中(高揚)。シーン遷移とフィーバー開始・終了で自動切替
 - リザルトでローカル1〜3位に入るとファンファーレSE(1位は特別ロング版)+巨大な順位表示(1位は回転光線+紙吹雪)
+- 設定画面でBGM/こうかおんを個別にオン・オフ可能(`save.ts` の `bgmOff`/`sfxOff`、起動時に反映)
+- タブが非表示(電話・通知・アプリ切替)から復帰した時、BGMは溜まった音符を一斉に鳴らさず再同期する
+
+## 触覚フィードバック / プッシュ通知
+
+- ホップ=軽い振動、ミス=中、フィーバー発動・上位入賞・購入成功=強い振動。`src/game/haptics.ts` に集約
+  (Webは`navigator.vibrate`。iOS化は`@capacitor/haptics`に差し替え。手順は `docs/release-checklist.md`)
+- ほんばんチケットを使い切った時、翌日の回復をローカル通知でリマインドする接続口を用意
+  (`src/game/notify.ts`。Webは何もしないスタブ。iOS化は`@capacitor/local-notifications`に差し替え)
 
 ## オンラインランキング(Firebase Firestore、無料)
 
@@ -57,7 +66,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.resource.data.score is int
                    && request.resource.data.score >= 0
-                   && request.resource.data.score <= 1000
+                   && request.resource.data.score <= 400
                    && request.resource.data.name is string
                    && request.resource.data.name.size() <= 12;
       allow delete: if false;
@@ -71,6 +80,8 @@ service cloud.firestore {
 - 実装はFirestore REST直叩き(`src/game/online.ts`、SDK依存なし)。1プレイヤー=1ドキュメント(匿名ID)なので同一人物がランキングに並ばない
 - **送信されるのは「ほんばん」の自己ベスト(`rankedBest`)のみ**。送信済みスコアを`lastSynced`に記録し、`rankedBest > lastSynced` の間は ほんばん終了時とランキング画面表示時に自動送信する(通信失敗しても次の機会に再送。名前変更時は`lastSynced`を0に戻して新しい名前で再送)
 - プレイヤー名は初回に「ノボラー1234」形式で自動生成、ホームで変更可(12文字)
+- TOP50に入っていなくても、`fetchMyRank()`(Firestoreの集計クエリ)で自分の順位だけを取得し、
+  世界タブの下部に固定表示する(読み取りコストがほぼゼロで済むcountクエリを使用)
 
 ## 広告と課金(iOS接続はmonetize.tsだけ)
 
@@ -92,7 +103,9 @@ service cloud.firestore {
 ## 分析(アナリティクス)
 
 `src/game/analytics.ts` の `logEvent()` に集約(開発ビルドはconsole+`window.__analytics`のみ。iOSでのFirebase Analytics接続は `docs/release-checklist.md` 参照)。イベント:
-`app_open` / `play_start{mode}` / `play_end{mode,score,maxCombo,fever}` / `fever_start` / `ad_shown` / `ticket_refill` / `purchase{id}` / `restore` / `ranking_view{tab}` / `name_change` / `skin_select{id}` / `lang_change{lang}`
+`app_open` / `play_start{mode}` / `play_end{mode,score,maxCombo,fever}` / `fever_start` / `ad_shown` / `ticket_refill` / `ticket_refund` / `purchase{id}` / `restore` / `ranking_view{tab}` / `name_change` / `skin_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `js_error{msg}`
+
+不正なJavaScriptエラー(`window.onerror`/`unhandledrejection`)も自動で`js_error`として送られる(本番の不具合検知用)。
 
 ## 開発・実行
 

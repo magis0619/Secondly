@@ -9,8 +9,9 @@ import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, FEVER, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND, skinColor } from "../game/config.ts";
+import { hapticHeavy, hapticLight, hapticMedium } from "../game/haptics.ts";
 import { t, zoneName } from "../game/i18n.ts";
-import { addScore, ensureIdentity } from "../game/save.ts";
+import { addScore, addTickets, ensureIdentity, loadSave } from "../game/save.ts";
 import { onlineEnabled, syncBest } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
@@ -102,12 +103,20 @@ export class GameScene implements Scene {
     private mode: GameMode = "practice",
   ) {}
 
+  private visHandler = (): void => {
+    // 電話・通知・アプリ切替などで画面が隠れたらプレイ中/カウントダウン中を自動ポーズ
+    if (document.hidden && !this.confirmOpen && (this.tower.phase === "play" || this.tower.phase === "count")) {
+      this.confirmOpen = true;
+    }
+  };
+
   enter(): void {
     const save = ensureIdentity();
     this.best = save.best;
     this.skin = save.skin;
     setBgm("game");
     logEvent("play_start", { mode: this.mode });
+    document.addEventListener("visibilitychange", this.visHandler);
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__climb = {
         tower: this.tower,
@@ -134,6 +143,10 @@ export class GameScene implements Scene {
         }),
       };
     }
+  }
+
+  exit(): void {
+    document.removeEventListener("visibilitychange", this.visHandler);
   }
 
   update(dt: number): void {
@@ -194,6 +207,7 @@ export class GameScene implements Scene {
           break;
         case "hop": {
           sfxHop(ev.h);
+          hapticLight();
           const [x, y] = this.platPos(ev.h - 1);
           // 踏み切り: 砂ぼこり+リング
           this.fx.burst(x, y, "#c9d6ff", 7, 100 * u, 3 * u);
@@ -208,6 +222,7 @@ export class GameScene implements Scene {
             this.feverCount++;
             this.tower.setFever(true);
             setBgm("fever");
+            hapticHeavy();
             logEvent("fever_start");
             sfxZone();
             this.banner = { text: t("feverBanner"), t: 1.4 };
@@ -255,6 +270,7 @@ export class GameScene implements Scene {
           }
           const dist = ev.from + 1 - ev.to;
           sfxFall(dist);
+          hapticMedium();
           this.juice.shake(clamp(0.15 + dist * 0.06, 0.2, 0.6));
           this.juice.flashScreen(COLORS.danger, 0.18);
           break;
@@ -873,6 +889,12 @@ export class GameScene implements Scene {
       if (inRect(this.resumeRect, x, y)) {
         this.confirmOpen = false;
       } else if (inRect(this.quitRect, x, y)) {
+        // ほんばんで1歩も登らずに離脱した場合はチケットを返す(誤タップ・電話等での
+        // 理不尽な消費を防ぐ)。広告除去済みはチケットを使っていないので対象外
+        if (this.mode === "ranked" && this.tower.maxH === 0 && !loadSave().adFree) {
+          addTickets(1);
+          logEvent("ticket_refund");
+        }
         this.app.manager.switchTo(new HomeScene(this.app));
       }
       return;

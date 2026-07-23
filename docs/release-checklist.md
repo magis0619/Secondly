@@ -9,7 +9,9 @@
 - 広告・課金の**差し替えポイント集約**(`src/game/monetize.ts` だけ触ればよい)
 - アプリアイコン `assets/appstore/icon-1024.png` / 起動画面 `assets/appstore/splash-2732.png`
 - プライバシーポリシー雛形 `docs/privacy-policy.md` / ストア掲載文の下書き `docs/store-listing.md`
-- セーフエリア対応・ポーズ・オフライン時のフォールバック
+- セーフエリア対応・電話や通知での自動ポーズ・オフライン時のフォールバック
+- BGM/こうかおんのオン・オフ設定、触覚フィードバック、チケット切れ通知の差し替えポイント
+  (`src/game/haptics.ts` / `src/game/notify.ts`)、レビュー依頼の接続口(`monetize.ts`)
 
 ## 全体の流れ
 
@@ -276,7 +278,98 @@ App Store Connect側も「日本語」「英語(米国)」の2ロケールで名
 | ATT の説明不足(5.1.2) | `NSUserTrackingUsageDescription` を必ず入れる。パーソナライズ広告を使わないなら ATT 自体を省略しトラッキング「なし」で申告 |
 | チップ課金の誤解(3.2.1) | 審査メモに「追加機能のない任意の支援」と明記。アプリ内の説明文もその通りになっている |
 
-## 11. リリース後
+## 11. 触覚フィードバック(Haptics)
+
+`src/game/haptics.ts` に `hapticLight/Medium/Heavy` を集約済み(Webは`navigator.vibrate`)。
+
+```bash
+npm i @capacitor/haptics && npx cap sync ios
+```
+
+```ts
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+
+export function hapticLight(): void { void Haptics.impact({ style: ImpactStyle.Light }); }
+export function hapticMedium(): void { void Haptics.impact({ style: ImpactStyle.Medium }); }
+export function hapticHeavy(): void { void Haptics.impact({ style: ImpactStyle.Heavy }); }
+```
+
+## 12. プッシュ通知(チケット回復リマインド)
+
+`src/game/notify.ts` の `scheduleTicketReminder()` / `cancelTicketReminder()` が差し替えポイント。
+
+```bash
+npm i @capacitor/local-notifications && npx cap sync ios
+```
+
+```ts
+import { LocalNotifications } from "@capacitor/local-notifications";
+
+const REMINDER_ID = 1001;
+const notifyText = {
+  ja: { title: "🎟 CLIMB 30", body: "きょうの ほんばん3回が かいふくしたよ! あそびに来てね" },
+  en: { title: "🎟 CLIMB 30", body: "Your 3 free Ranked plays are back today!" },
+};
+
+export async function scheduleTicketReminder(): Promise<void> {
+  const perm = await LocalNotifications.checkPermissions();
+  if (perm.display !== "granted") {
+    const req = await LocalNotifications.requestPermissions();
+    if (req.display !== "granted") return; // 拒否されたら以後は求めない(ここでリトライしない)
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(18, 0, 0, 0);
+  const lang = currentLang() === "ja" ? "ja" : "en"; // src/game/i18n.ts
+  await LocalNotifications.schedule({
+    notifications: [{ id: REMINDER_ID, schedule: { at: tomorrow }, ...notifyText[lang] }],
+  });
+}
+
+export async function cancelTicketReminder(): Promise<void> {
+  await LocalNotifications.cancel({ notifications: [{ id: REMINDER_ID }] });
+}
+```
+
+**重要**: 許可ダイアログは起動直後には出さない設計にしてある(`AdGateScene.enter()` = 実際にチケットが
+切れて補充画面を見せる瞬間にだけ呼ばれる)。この順序を崩さないこと(離脱率が上がる)。
+
+## 13. App Store レビュー依頼
+
+`src/game/monetize.ts` の `requestReview()` が差し替えポイント。5回目・25回目・60回目の自己ベスト更新時
+(`result.ts`)にだけ呼ばれる設計。ネイティブAPI自体にも年間の呼び出し上限があるため、
+呼び出し側の頻度調整と合わせて二重に乱発防止している。
+
+```bash
+npm i @capacitor-community/in-app-review && npx cap sync ios
+```
+
+```ts
+import { InAppReview } from "@capacitor-community/in-app-review";
+
+export async function requestReview(): Promise<void> {
+  await InAppReview.requestReview();
+}
+```
+
+## 14. 残っているリスクと運用メモ
+
+- **App Check未導入**: Firestoreのread/writeはAPIキーがあれば誰でも叩ける状態。悪意ある大量書き込みへの
+  防御はFirestoreルールのバリデーション(score範囲・name長)のみ。心配なら`firebase-appcheck-capacitor`の
+  導入を検討(v1.1候補)
+- **ニックネームはUGC**: 不適切な文字列が入る可能性がある。通報導線は現状「プライバシーポリシー記載の
+  連絡先にメール」のみ。運営者はFirebaseコンソールから該当ドキュメントの`name`フィールドを手動編集できる
+  (削除はルールで禁止しているが上書きは可能)
+- **チケットは端末のローカル日付で判定**: 端末の時計を進めれば理論上チケットは早期に回復してしまう。
+  実害は「無料プレイ回数を少し多く使われる」程度で、世界ランキングの信頼性(スコア自体)には影響しないため
+  許容している
+- **クラウドセーブなし**: `localStorage`は機種変更・アプリ再インストールで消える。ベスト記録や課金の
+  復元は「リストア」ボタン(購入履歴のみ)でカバーされるが、ランキング順位やきせかえ進捗は引き継がれない。
+  気になる場合はplayerIdをiCloud Keychain等に退避する仕組みをv1.1で検討
+- **利用規約(Terms of Service)ページは未作成**: 課金があるアプリでは用意しておくと安全(プライバシー
+  ポリシーとは別物)。App Store Connectの「EULA」欄で標準契約を使う選択肢もある
+
+## 15. リリース後
 
 - Firestore の無料枠(読取5万/日)監視: Firebase コンソール → 使用状況。超えそうならランキングのキャッシュ間隔を伸ばす
 - 更新の反映は `CAPACITOR=1 npm run build && npx cap sync ios` → Archive → 審査(Webコードの変更もネイティブ再提出が必要)

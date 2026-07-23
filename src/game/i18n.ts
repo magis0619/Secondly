@@ -108,6 +108,11 @@ const JA = {
   howto6: "ほんばんで せかいランキングに\nちょうせん(1日3かい むりょう)",
   howtoRow: "❓ あそびかた",
   close: "とじる",
+  bgmRow: "🎵 BGM: {state}",
+  sfxRow: "🔊 こうかおん: {state}",
+  stateOn: "オン",
+  stateOff: "オフ",
+  yourRankLabel: "― あなたの じゅんい ―",
 };
 
 const EN: Record<keyof typeof JA, string> = {
@@ -189,6 +194,11 @@ const EN: Record<keyof typeof JA, string> = {
   howto6: "Ranked mode: challenge the\nworld (3 free plays/day)",
   howtoRow: "❓ How to Play",
   close: "Close",
+  bgmRow: "🎵 Music: {state}",
+  sfxRow: "🔊 Sound: {state}",
+  stateOn: "On",
+  stateOff: "Off",
+  yourRankLabel: "― Your Rank ―",
 };
 
 export type TKey = keyof typeof JA;

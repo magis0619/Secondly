@@ -6,6 +6,7 @@ import { logEvent } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { t } from "../game/i18n.ts";
 import { AD_STUB, STUB_AD_SEC, showNativeAd } from "../game/monetize.ts";
+import { cancelTicketReminder, scheduleTicketReminder } from "../game/notify.ts";
 import { addTickets, getTickets, loadSave, useTicket } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
@@ -20,11 +21,13 @@ import { StoreScene } from "./store.ts";
  */
 export function startRanked(app: App): void {
   if (loadSave().adFree) {
+    void cancelTicketReminder();
     app.manager.switchTo(new GameScene(app, "ranked"));
     return;
   }
   if (getTickets(TICKETS.DAILY) > 0) {
     useTicket();
+    void cancelTicketReminder(); // ちゃんと遊べたので回復リマインドは不要
     app.manager.switchTo(new GameScene(app, "ranked"));
     return;
   }
@@ -47,6 +50,7 @@ export class AdGateScene implements Scene {
 
   enter(): void {
     setBgm("menu");
+    void scheduleTicketReminder(); // チケット切れを見せた=明日の回復を通知でリマインド
   }
 
   private grantAndStart(): void {

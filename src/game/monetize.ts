@@ -49,3 +49,13 @@ export async function purchase(p: Product): Promise<boolean> {
 export async function restorePurchases(): Promise<ProductId[]> {
   return [];
 }
+
+/**
+ * ストアレビューを促す(SKStoreReviewController相当)。スタブはNo-op。
+ * iOS化: @capacitor-community/in-app-review 等に差し替える(docs/release-checklist.md参照)。
+ * ネイティブのレビューAPIは呼び出し回数に自動で上限がかかる(年数回)ため、
+ * 呼び出し側の頻度調整(result.tsの節目プレイのみ)と合わせて二重に乱発を防いでいる。
+ */
+export async function requestReview(): Promise<void> {
+  // TODO(iOS): await InAppReview.requestReview()
+}

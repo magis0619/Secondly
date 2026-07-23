@@ -5,11 +5,19 @@ import { getAudio, getNoiseBuffer } from "./audio.ts";
 
 type Wave = OscillatorType;
 
+let muted = false;
+
+/** 効果音の一括ミュート切替(設定画面用) */
+export function setSfxMuted(v: boolean): void {
+  muted = v;
+}
+
 function tone(
   freq: number,
   dur: number,
   opts: { type?: Wave; gain?: number; slideTo?: number; delay?: number } = {},
 ): void {
+  if (muted) return;
   const bus = getAudio();
   if (!bus) return;
   const { ctx, out } = bus;
@@ -27,6 +35,7 @@ function tone(
 }
 
 function noise(dur: number, opts: { gain?: number; freq?: number; freqTo?: number } = {}): void {
+  if (muted) return;
   const bus = getAudio();
   if (!bus) return;
   const { ctx, out } = bus;

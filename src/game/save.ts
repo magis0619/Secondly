@@ -37,6 +37,9 @@ export interface SaveData {
   lang: string;
   /** 「あそびかた」を一度でも閉じたか(初回起動ポップの表示判定) */
   seenHowto: boolean;
+  /** サウンド設定 */
+  bgmOff: boolean;
+  sfxOff: boolean;
 }
 
 const DEFAULTS: SaveData = {
@@ -54,6 +57,8 @@ const DEFAULTS: SaveData = {
   skin: "pink",
   lang: "",
   seenHowto: false,
+  bgmOff: false,
+  sfxOff: false,
 };
 
 export function loadSave(): SaveData {
@@ -115,6 +120,20 @@ export function markHowtoSeen(): void {
   if (save.seenHowto) return;
   save.seenHowto = true;
   store(save);
+}
+
+export function toggleBgmOff(): boolean {
+  const save = loadSave();
+  save.bgmOff = !save.bgmOff;
+  store(save);
+  return save.bgmOff;
+}
+
+export function toggleSfxOff(): boolean {
+  const save = loadSave();
+  save.sfxOff = !save.sfxOff;
+  store(save);
+  return save.sfxOff;
 }
 
 export function setPlayerName(name: string): SaveData {

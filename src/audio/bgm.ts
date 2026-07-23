@@ -140,7 +140,9 @@ const SONGS: Record<BgmTrack, Song> = {
   },
 };
 
-let current: BgmTrack | null = null;
+let current: BgmTrack | null = null; // 実際に鳴っている(鳴らそうとしている)トラック
+let desired: BgmTrack | null = null; // ミュート解除時に復元する、直近でリクエストされたトラック
+let muted = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 let bus: GainNode | null = null; // 曲全体の音量(フェード用)
 let step = 0;
@@ -203,7 +205,24 @@ function scheduleStep(song: Song, t: number, s: number): void {
   }
 }
 
+/** 指定トラックを再生。ミュート中は実際には鳴らさず、次回ミュート解除時に復元する */
 export function setBgm(track: BgmTrack | null): void {
+  desired = track;
+  if (muted) return;
+  applyTrack(track);
+}
+
+/**
+ * BGMの一括ミュート切替(設定画面用)。OFFで即停止、ONで直近リクエストのトラックを再開する。
+ * setBgm自体は呼び出し側(各シーン)がそのまま呼び続けてよく、ここでは実際の再生だけを止める。
+ */
+export function setBgmMuted(v: boolean): void {
+  if (v === muted) return;
+  muted = v;
+  applyTrack(muted ? null : desired);
+}
+
+function applyTrack(track: BgmTrack | null): void {
   if (track === current) return;
   current = track;
   stopNow();
@@ -220,6 +239,12 @@ export function setBgm(track: BgmTrack | null): void {
       bus.gain.value = 1;
       bus.connect(a.out);
       nextTime = a.ctx.currentTime + 0.06;
+    }
+    // タブ/アプリが長時間バックグラウンドだった等でnextTimeが大きく遅れていたら
+    // 再同期する(そのままだと復帰直後に溜まった音符が一斉に鳴ってしまう)
+    if (nextTime < a.ctx.currentTime - 0.5) {
+      nextTime = a.ctx.currentTime + 0.06;
+      step = 0;
     }
     // 0.25秒ぶん先読みしてスケジュール
     while (nextTime < a.ctx.currentTime + 0.25) {

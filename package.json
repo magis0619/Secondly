@@ -1,7 +1,7 @@
 {
   "name": "secondly",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Secondly - you are the second hand (hyper-casual action)",
   "scripts": {

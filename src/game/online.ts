@@ -71,6 +71,43 @@ export async function syncBest(): Promise<SyncResult> {
   return ok ? "sent" : "failed";
 }
 
+/**
+ * 自分のスコアより上位の人数を集計クエリ(runAggregationQuery)で取得し、順位を返す。
+ * TOP_N圏外の人でも自分の順位が分かるようにするため。Sparkプランで使え、
+ * 通常クエリより読み取りコストが小さい。無効/失敗はnull
+ */
+export async function fetchMyRank(score: number): Promise<number | null> {
+  if (!onlineEnabled() || score <= 0) return null;
+  try {
+    const res = await fetch(`${base()}:runAggregationQuery?key=${ONLINE.apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: timeoutSignal(),
+      body: JSON.stringify({
+        structuredAggregationQuery: {
+          structuredQuery: {
+            from: [{ collectionId: ONLINE.collection }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: "score" },
+                op: "GREATER_THAN",
+                value: { integerValue: String(Math.floor(score)) },
+              },
+            },
+          },
+          aggregations: [{ alias: "higher", count: {} }],
+        },
+      }),
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as { result?: { aggregateFields?: { higher?: { integerValue?: string } } } }[];
+    const higher = rows[0]?.result?.aggregateFields?.higher?.integerValue;
+    return higher !== undefined ? parseInt(higher, 10) + 1 : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 世界ランキング上位を取得。無効/失敗はnull */
 export async function fetchTop(): Promise<WorldEntry[] | null> {
   if (!onlineEnabled()) return null;

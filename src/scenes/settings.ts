@@ -1,11 +1,11 @@
 import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
-import { sfxStart } from "../audio/sfx.ts";
-import { setBgm } from "../audio/bgm.ts";
+import { sfxStart, setSfxMuted } from "../audio/sfx.ts";
+import { setBgm, setBgmMuted } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, LEGAL, ONLINE, VERSION } from "../game/config.ts";
 import { t, toggleLang } from "../game/i18n.ts";
-import { loadSave, setPlayerName } from "../game/save.ts";
+import { loadSave, setPlayerName, toggleBgmOff, toggleSfxOff } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { HomeScene } from "./home.ts";
@@ -15,6 +15,8 @@ import { HowToModal } from "./howto.ts";
 export class SettingsScene implements Scene {
   private t = 0;
   private name = "";
+  private bgmOff = false;
+  private sfxOff = false;
   private rows: { rect: Rect; action: () => void; label: () => string; sub?: () => string }[] = [];
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private howto: HowToModal;
@@ -25,7 +27,10 @@ export class SettingsScene implements Scene {
 
   enter(): void {
     setBgm("menu");
-    this.name = loadSave().playerName;
+    const save = loadSave();
+    this.name = save.playerName;
+    this.bgmOff = save.bgmOff;
+    this.sfxOff = save.sfxOff;
   }
 
   update(dt: number): void {
@@ -60,6 +65,22 @@ export class SettingsScene implements Scene {
       () => {
         const lang = toggleLang();
         logEvent("lang_change", { lang });
+      },
+    );
+    add(
+      () => t("bgmRow", { state: this.bgmOff ? t("stateOff") : t("stateOn") }),
+      () => {
+        this.bgmOff = toggleBgmOff();
+        setBgmMuted(this.bgmOff);
+        logEvent("bgm_toggle", { off: this.bgmOff });
+      },
+    );
+    add(
+      () => t("sfxRow", { state: this.sfxOff ? t("stateOff") : t("stateOn") }),
+      () => {
+        this.sfxOff = toggleSfxOff();
+        setSfxMuted(this.sfxOff);
+        logEvent("sfx_toggle", { off: this.sfxOff });
       },
     );
     add(

@@ -4,6 +4,7 @@ import { sfxBest, sfxStart } from "../audio/sfx.ts";
 import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
 import { COLORS, LEGAL } from "../game/config.ts";
+import { hapticHeavy } from "../game/haptics.ts";
 import { productDesc, productLabel, t } from "../game/i18n.ts";
 import type { Product } from "../game/monetize.ts";
 import { PRODUCTS, purchase, restorePurchases } from "../game/monetize.ts";
@@ -55,6 +56,7 @@ export class StoreScene implements Scene {
         this.toast = { text: t("supportToast"), t: 2.8 };
       }
       sfxBest();
+      hapticHeavy();
     });
   }
 

@@ -5,7 +5,11 @@ import { setBgm } from "../audio/bgm.ts";
 import { TAU, clamp } from "../core/math.ts";
 import { Fx } from "../fx/particles.ts";
 import { COLORS } from "../game/config.ts";
+import { hapticHeavy } from "../game/haptics.ts";
 import { t } from "../game/i18n.ts";
+import { logEvent } from "../game/analytics.ts";
+import { requestReview } from "../game/monetize.ts";
+import { loadSave } from "../game/save.ts";
 import { drawFx } from "../render/fx.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
@@ -59,13 +63,20 @@ export class ResultScene implements Scene {
       this.celebrated = true;
       if (p.rank === 1) {
         sfxFanfareBig();
+        hapticHeavy();
         this.fx.burst(vp.w / 2, vp.h * 0.45, COLORS.gold, 30, 260 * u, 4.5 * u);
         this.fx.ring(vp.w / 2, vp.h * 0.45, COLORS.gold, 150 * u, 4 * u, 0.5);
       } else if (p.rank === 2 || p.rank === 3) {
         sfxFanfare();
+        hapticHeavy();
         this.fx.burst(vp.w / 2, vp.h * 0.45, p.rank === 2 ? "#cdd8ee" : "#d9a066", 18, 180 * u, 3.5 * u);
       } else if (p.newBest) {
         sfxBest();
+      }
+      // 節目のプレイ回数(5/25/60回目)かつ自己ベスト更新時だけレビューを促す(乱発防止)
+      if (p.newBest && [5, 25, 60].includes(loadSave().playCount)) {
+        logEvent("review_prompt");
+        void requestReview();
       }
     }
 
