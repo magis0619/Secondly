@@ -670,7 +670,7 @@ export class GameScene implements Scene {
 
     const anchorY = H * LAYOUT.ANCHOR;
     const stepH = LAYOUT.STEP_H * u;
-    const visTop = tw.h + 2; // 見えるのは2つ上まで
+    const visTop = tw.h + 3; // 見えるのは3つ上まで
 
     const hMin = Math.max(0, Math.floor(this.camH - anchorY / stepH) - 1);
     for (let hh = hMin; hh <= visTop; hh++) {
