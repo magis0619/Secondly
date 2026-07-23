@@ -13,6 +13,21 @@
 - BGM/こうかおんのオン・オフ設定、触覚フィードバック、チケット切れ通知の差し替えポイント
   (`src/game/haptics.ts` / `src/game/notify.ts`)、レビュー依頼の接続口(`monetize.ts`)
 
+## 再利用早見表(2本目以降のアプリ向け)
+
+既に1本リリース済みの前提での早見表。各サービスの**アカウントはそのまま使い回せる**が、
+**このアプリ用の「アプリ/プロジェクト」単位の登録は毎回必要**なものが多い。
+
+| 項目 | 再利用可否 |
+|---|---|
+| Apple Developer Program(年間契約・銀行口座/税務情報) | ♻️ アカウントそのまま。新規登録・再契約不要 |
+| Bundle ID / App ID | 🆕 アプリごとに新規作成必須 |
+| AdMobアカウント | ♻️ アカウントは再利用。🆕 このアプリ用の「アプリ」「広告ユニット」は新規作成 |
+| RevenueCatアカウント | ♻️ アカウントは再利用。🆕 このアプリ用の「プロジェクト」は新規作成 |
+| Firebase(Analytics/Firestore) | ♻️ アカウントは再利用。🆕 このアプリ用のプロジェクトは新規(既存流用も可、6.5参照) |
+| GitHub Pages(プライバシーポリシー) | ♻️🆕 リポジトリ/仕組みは再利用可、URLはアプリごとに1本必要(7参照) |
+| App Store Connect アプリ登録 | 🆕 アプリごとに新規必須 |
+
 ## 全体の流れ
 
 ```
@@ -23,12 +38,17 @@
 
 ---
 
-## 1. Apple Developer Program(未加入なら)
+## 1. Apple Developer Program `♻️ 再利用可`
 
-- <https://developer.apple.com/programs/> から加入(**年 ¥12,980 前後**)。個人でOK
-- 有料アプリ/App内課金を出すため、App Store Connect の **「契約/税/口座」で有料Appの契約に同意し、銀行口座と税務情報(W-8BEN等)を登録**しておく。ここが未完だと課金のテストすらできないので最初にやる
+前アプリで加入済みのアカウントをそのまま使う。確認するのは以下の2点だけ:
 
-## 2. Bundle ID の決定
+- 年間メンバーシップが有効期限内か(<https://developer.apple.com/account/> で確認)
+- App Store Connect の「契約/税/口座」で**有料Appの契約が有効**なままか(失効しているとApp内課金のテストもできない)
+
+(未加入の場合のみ) <https://developer.apple.com/programs/> から加入(**年 ¥12,980 前後**)。個人でOK。
+有料アプリ/App内課金を出すため、「契約/税/口座」で有料Appの契約に同意し、銀行口座と税務情報(W-8BEN等)を登録しておく。
+
+## 2. Bundle ID の決定 `🆕 新規必須`
 
 1. `capacitor.config.ts` の `appId` を自分のものに変更(例: `com.yamada.climb30`)。**後から変更不可**
 2. <https://developer.apple.com/account/resources/identifiers> で同じ ID の App ID を作成(Capabilities は不要。In-App Purchase は自動で有効)
@@ -53,11 +73,14 @@ Xcode で: Signing & Capabilities → 自分の Team を選択 / Deployment Info
 
 ## 5. AdMob(ほんばん前のインタースティシャル広告)
 
-### 5-1. AdMob 側
+### 5-1. AdMob 側 `♻️🆕` アカウントは再利用、アプリ登録は新規
 
-1. <https://admob.google.com/> でアカウント作成 → 「アプリを追加」(まだストア未公開なので「アプリストアに掲載していない」を選ぶ)
-2. **アプリID**(`ca-app-pub-xxxxxxxx~yyyyyyy`)を控える
-3. 広告ユニットを作成 → **リワード(推奨)またはインタースティシャル** → ユニットID(`ca-app-pub-xxxxxxxx/zzzzzzz`)を控える
+前アプリで使っているAdMobアカウントに<https://admob.google.com/>でログイン → 「アプリを追加」で
+CLIMB 30用のアプリを新規作成する(アカウント自体の再作成は不要)。
+未加入の場合のみアカウント作成から: 「アプリを追加」(まだストア未公開なので「アプリストアに掲載していない」を選ぶ)
+
+1. **アプリID**(`ca-app-pub-xxxxxxxx~yyyyyyy`)を控える
+2. 広告ユニットを作成 → **リワード(推奨)またはインタースティシャル** → ユニットID(`ca-app-pub-xxxxxxxx/zzzzzzz`)を控える
    - ゲーム内は「広告を見るとほんばん+3回」という**報酬型**の導線なので、リワード広告が意味的に正しい(`AdMob.prepareRewardVideoAd`/`showRewardVideoAd` を使う。視聴完了イベントで `true` を返すようにする)
 
 ### 5-2. プラグイン導入(Mac 上)
@@ -132,9 +155,12 @@ export async function showNativeAd(): Promise<boolean> {
 
 各商品に日本語の表示名と説明を入れ、審査用スクショ(ストア画面のスクショでよい)を添付。
 
-### 6-2. RevenueCat セットアップ
+### 6-2. RevenueCat セットアップ `♻️🆕` アカウントは再利用、プロジェクトは新規
 
-1. <https://www.revenuecat.com/>(無料枠で十分)→ プロジェクト作成 → iOSアプリ追加(Bundle ID)→ App Store Connect の App用共有シークレット/APIキーを接続
+前アプリのRevenueCatアカウントにログイン → CLIMB 30用の**プロジェクトを新規作成**する(アカウント自体は共通)。
+未加入の場合のみアカウント作成から: <https://www.revenuecat.com/>(無料枠で十分)
+
+1. プロジェクト作成 → iOSアプリ追加(Bundle ID)→ App Store Connect の App用共有シークレット/APIキーを接続
 2. 4商品を Products に取り込み、Entitlement `noads` に `.noads` を紐づけ
 3. プラグイン導入: `npm i @revenuecat/purchases-capacitor && npx cap sync ios`
 
@@ -188,7 +214,7 @@ export async function restorePurchases(): Promise<ProductId[]> {
 
 ## 6.5 分析(Firebase Analytics)と表示名のローカライズ
 
-### 分析の接続(任意だが推奨)
+### 分析の接続(任意だが推奨) `♻️🆕` アカウントは再利用、プロジェクトは新規 or 既存流用
 
 ゲーム内は `src/game/analytics.ts` の `logEvent()` に計測が集約済み(イベント一覧はファイル冒頭)。
 開発ビルドではconsole出力のみ。iOSで実際に収集するには:
@@ -197,7 +223,11 @@ export async function restorePurchases(): Promise<ProductId[]> {
 npm i @capacitor-firebase/analytics firebase && npx cap sync ios
 ```
 
-Firebaseコンソールで既存プロジェクト(climb30-*)にiOSアプリを追加し、`GoogleService-Info.plist` を
+前アプリと同じFirebaseアカウントを使い、以下のどちらかを選ぶ:
+- **新規プロジェクトを作る**(推奨: アプリごとにAnalyticsを分離できる)
+- **前アプリと同じプロジェクトに新規iOSアプリを追加する**(Analytics上で複数アプリが混在するが管理は1つで済む)
+
+いずれの場合もFirebaseコンソールでiOSアプリを追加し、`GoogleService-Info.plist` を
 Xcodeの `App/App/` に入れる。`analytics.ts` の `logEvent` を差し替え:
 
 ```ts
@@ -222,11 +252,13 @@ Xcodeで: プロジェクト → Info → Localizations に **Japanese** を追�
 
 App Store Connect側も「日本語」「英語(米国)」の2ロケールで名前・説明を登録する(`docs/store-listing.md`)。
 
-## 7. プライバシーポリシー(必須)
+## 7. プライバシーポリシー(必須) `♻️🆕` 仕組みは再利用可、URLはアプリごとに1本必要
 
 1. `docs/privacy-policy.md` の `【】` 箇所(連絡先メール等)を埋める
-2. 公開する。一番簡単なのは GitHub Pages:
-   - 新規公開リポジトリ(例 `climb30-privacy`)に `index.md` として置く → Settings → Pages で公開
+2. 公開する。一番簡単なのは GitHub Pages。前アプリで使ったリポジトリ/仕組みを流用できる:
+   - **前アプリと同じPagesリポジトリを使い回す場合**: `climb30/index.md` のようにパスを分けて追加(URLも自動でパス別になる)
+   - **新規に用意する場合**: 新規公開リポジトリ(例 `climb30-privacy`)に `index.md` として置く → Settings → Pages で公開
+   - いずれにせよ**URLはアプリごとに別物**になる(前アプリのURLをそのまま使い回すことはできない)
 3. URL を以下 3 箇所に設定:
    - `src/game/config.ts` の `LEGAL.privacyUrl`(ストア画面にリンクが出る)
    - App Store Connect のアプリ情報「プライバシーポリシーURL」
@@ -244,7 +276,7 @@ App Store Connect側も「日本語」「英語(米国)」の2ロケールで名
 
 (AdMobのパーソナライズ広告を使わない設定にするならトラッキング「いいえ」+ATT省略も可)
 
-## 8. App Store Connect でアプリ登録
+## 8. App Store Connect でアプリ登録 `🆕 新規必須`
 
 - マイApp → 「+」→ 新規App(プラットフォーム iOS / Bundle ID / SKU は任意文字列)
 - 名前・サブタイトル・説明・キーワード → **`docs/store-listing.md` からコピペ**
