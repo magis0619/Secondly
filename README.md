@@ -15,13 +15,14 @@
 - 足場は**左か右かの2種のみ**(ランダム、同一側の連続は最大7)。**画面には3つ上の足場まで**見え、さらに1つ上がうっすら透けて見える(その先は不明)
 - **画面の左半分/右半分をタップ**して、次の足場がある側へジャンプ
 - **ミス(逆側をタップ)すると、その側の「直近下の足場」まで落下**。同じ側が続いているほど、逆側へのミスの落下距離が大きくなる(地面が最終セーフティ。死なない)
+- **試験導入**: 今乗っている足場と**同じ側**をタップした場合は間違いでも落下せず無視される(`GAME.SAFE_SAME_SIDE`でON/OFF)。落下するのは「反対側へ飛ぼうとして間違えた」時だけ
 
 ## モードと画面
 
 - **れんしゅう** … 無料でいつでも。記録はローカルランキング(📱)のみ
 - **🌏 ほんばん** … 世界ランキングに挑戦するモード。**1日3回無料**(🎟チケット制)。使い切ったら**広告1回の視聴で+3回**。広告除去購入者は**無制限**。残数はホームに常時表示
 - **🔥 フィーバー** … ノーミスで12回登るとゲージ満タン→5秒間フィーバー。**足場が中央1本になり、どちらをタップしても登れる(=連打で一気に登る)**。ホップも高速化。終了すると足場は左右に戻る(直後の1段だけは両側OKの猶予)。ミスで即終了&ゲージリセット
-- **👕 きせかえ** … 累計プレイ/ベスト高度/おうえん購入でバンダナを解放(`config.ts`の`SKINS`)。ホームのキャラ横から変更
+- **👕 きせかえ** … 「キャラ」「バンダナ」の2タブ。キャラ4体(ピコ/ペンギン/おばけ/ネコ、`config.ts`の`CHARAS`)×バンダナ11色(`SKINS`)を自由に組み合わせられる。解放条件は累計プレイ/ベスト高度/ほんばんベスト/累計高度(`totalM`)/フィーバー回数(`feverCount`)/おうえん購入の実績から自動判定(`save.ts`の`isUnlocked`)。キャラの描画は`src/render/chara.ts`に共通化(ゲーム/ホーム/一覧の3画面で共用)
 - **⚙ せってい** … 名前の変更・言語・プライバシーポリシー・バージョン(ホーム右上)
 
 ```
@@ -103,7 +104,7 @@ service cloud.firestore {
 ## 分析(アナリティクス)
 
 `src/game/analytics.ts` の `logEvent()` に集約(開発ビルドはconsole+`window.__analytics`のみ。iOSでのFirebase Analytics接続は `docs/release-checklist.md` 参照)。イベント:
-`app_open` / `play_start{mode}` / `play_end{mode,score,maxCombo,fever}` / `fever_start` / `ad_shown` / `ticket_refill` / `ticket_refund` / `purchase{id}` / `restore` / `ranking_view{tab}` / `name_change` / `skin_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `js_error{msg}`
+`app_open` / `play_start{mode}` / `play_end{mode,score,maxCombo,fever}` / `fever_start` / `ad_shown` / `ticket_refill` / `ticket_refund` / `purchase{id}` / `restore` / `ranking_view{tab}` / `name_change` / `skin_select{id}` / `chara_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `js_error{msg}`
 
 不正なJavaScriptエラー(`window.onerror`/`unhandledrejection`)も自動で`js_error`として送られる(本番の不具合検知用)。
 

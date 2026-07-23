@@ -111,6 +111,12 @@ export class Tower {
       this.anim = { kind: "hop", t: 0, dur, from: this.h - 1 };
       this.events.push({ type: "hop", h: this.h, side: d });
     } else {
+      // 試験(SAFE_SAME_SIDE): 今乗っている足場と同じ側を押した場合はミスにせず無視する。
+      // 「自分の真下側への連打」でチケット級のペナルティを食らう理不尽の解消が目的。
+      // 地面(h=0)と中央足場の上は「乗っている側」が無いので対象外(従来どおり)。
+      if (GAME.SAFE_SAME_SIDE && this.h >= 1 && !this.isCenter(this.h) && this.sides[this.h] === d) {
+        return false;
+      }
       // 押した側の直近下の足場へ落下(なければ地面h=0)。
       // ただし中央足場の上にいる時(フィーバー終了の境界)は落ちず、その場でミス動作だけ
       let to = 0;

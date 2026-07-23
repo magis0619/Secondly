@@ -8,13 +8,14 @@ import { setBgm } from "../audio/bgm.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
 import { logEvent } from "../game/analytics.ts";
-import { COLORS, FEVER, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND, skinColor } from "../game/config.ts";
+import { COLORS, FEVER, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND } from "../game/config.ts";
 import { hapticHeavy, hapticLight, hapticMedium } from "../game/haptics.ts";
 import { t, zoneName } from "../game/i18n.ts";
-import { addScore, addTickets, ensureIdentity, loadSave } from "../game/save.ts";
+import { addFeverCount, addScore, addTickets, ensureIdentity, loadSave } from "../game/save.ts";
 import { onlineEnabled, syncBest } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
+import { drawChara } from "../render/chara.ts";
 import { drawFx } from "../render/fx.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
@@ -91,6 +92,7 @@ export class GameScene implements Scene {
   private feverT = 0;
   private feverCount = 0;
   private skin = "pink";
+  private chara = "pico";
   private trailAcc = 0;
   /** ホームへ戻る確認ポップアップ(表示中はゲーム全体を一時停止) */
   private confirmOpen = false;
@@ -114,6 +116,7 @@ export class GameScene implements Scene {
     const save = ensureIdentity();
     this.best = save.best;
     this.skin = save.skin;
+    this.chara = save.chara;
     setBgm("game");
     logEvent("play_start", { mode: this.mode });
     document.addEventListener("visibilitychange", this.visHandler);
@@ -220,6 +223,7 @@ export class GameScene implements Scene {
             this.combo = 0; // 次のフィーバーはまた0から溜め直し
             this.feverT = FEVER.TIME;
             this.feverCount++;
+            addFeverCount(); // きせかえ解放条件用の累計
             this.tower.setFever(true);
             setBgm("fever");
             hapticHeavy();
@@ -601,76 +605,16 @@ export class GameScene implements Scene {
     ctx.save();
     ctx.translate(vx, vy - r - 4 * u - jump);
     ctx.rotate(rot);
-    ctx.scale(sx, sy);
-
-    // 腕
-    ctx.strokeStyle = COLORS.player;
-    ctx.lineCap = "round";
-    ctx.lineWidth = 5.5 * u;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * r * 0.7, -r * 0.05);
-      ctx.lineTo(s * r * (1.05 + 0.1 * armLift), -r * 0.05 - armLift * r * 0.9);
-      ctx.stroke();
-    }
-    // 脚(ホップ中はたたむ)
-    ctx.lineWidth = 6 * u;
+    // 目は次の足場の側を見る(フィーバー中央なら正面)。ホップ中は脚をたたむ
     const legTuck = tw.anim.kind === "hop" ? Math.sin(Math.min(tw.anim.t / tw.anim.dur, 1) * Math.PI) : 0;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * r * 0.35, r * 0.85);
-      ctx.lineTo(s * r * 0.42, r * (1.25 - legTuck * 0.35));
-      ctx.stroke();
-    }
-
-    // 体(フィーバー中は虹色のオーラ)
-    const fever = this.feverT > 0;
-    ctx.fillStyle = COLORS.player;
-    ctx.shadowColor = fever ? `hsl(${Math.floor((this.t * 400) % 360)}, 95%, 60%)` : COLORS.accent;
-    ctx.shadowBlur = (fever ? 20 : 10) * u;
-    ctx.beginPath();
-    ctx.roundRect(-r * 0.82, -r, r * 1.64, r * 2, r * 0.72);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // バンダナ(きせかえ)+なびくしっぽ
-    ctx.fillStyle = skinColor(this.skin, this.t);
-    ctx.fillRect(-r * 0.82, -r * 0.72, r * 1.64, r * 0.3);
-    ctx.beginPath();
-    const wob = Math.sin(this.t * 9) * 3 * u;
-    ctx.moveTo(r * 0.7, -r * 0.6);
-    ctx.quadraticCurveTo(r * 1.3, -r * 0.5 + wob, r * 1.7, -r * 0.2 + wob * 1.4);
-    ctx.quadraticCurveTo(r * 1.25, -r * 0.28, r * 0.75, -r * 0.38);
-    ctx.fill();
-
-    // 目(次の足場の側を見る。フィーバー中央なら正面。落下中はぐるぐる)
-    const nextDir = tw.col(tw.h + 1);
-    const blink = Math.sin(this.t * 0.9 + 2) > 0.985;
-    ctx.fillStyle = "#1c2743";
-    for (const s of [-1, 1]) {
-      const ex = s * r * 0.28 + nextDir * r * 0.1;
-      const ey = -r * 0.22;
-      if (falling) {
-        ctx.strokeStyle = "#1c2743";
-        ctx.lineWidth = 1.6 * u;
-        ctx.beginPath();
-        ctx.arc(s * r * 0.28, ey, r * 0.15, this.t * 14, this.t * 14 + 4.5);
-        ctx.stroke();
-      } else if (blink) {
-        ctx.fillRect(ex - r * 0.14, ey, r * 0.28, 1.4 * u);
-      } else {
-        ctx.beginPath();
-        ctx.arc(ex, ey, r * 0.14, 0, TAU);
-        ctx.fill();
-      }
-    }
-    // ほっぺ
-    ctx.fillStyle = "rgba(255,79,163,0.35)";
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * r * 0.52, r * 0.05, r * 0.12, 0, TAU);
-      ctx.fill();
-    }
+    drawChara(ctx, {
+      r,
+      u,
+      t: this.t,
+      chara: this.chara,
+      skin: this.skin,
+      pose: { sx, sy, armLift, legTuck, falling, nextDir: tw.col(tw.h + 1), fever: this.feverT > 0 },
+    });
     ctx.restore();
   }
 

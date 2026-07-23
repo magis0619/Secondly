@@ -33,6 +33,8 @@ export const GAME = {
   FALL_BASE: 0.16,
   FALL_PER_STEP: 0.05,
   FALL_MAX: 0.7,
+  /** 試験: 今乗っている足場と同じ側をタップしても(間違いでも)落下させず無視する */
+  SAFE_SAME_SIDE: true,
   /** 残りこの秒数からtick音+赤表示 */
   URGENT: 5,
   /** TIME UP後、リザルトへ移るまでの間 */
@@ -103,13 +105,19 @@ export const TICKETS = {
   AD_REWARD: 3,
 } as const;
 
-/** きせかえ(バンダナ)。condは自動判定なので解放状態の保存は不要 */
+/** きせかえの解放条件(スキン/キャラ共通)。実績から自動判定なので解放状態の保存は不要 */
+export interface UnlockCond {
+  type: "free" | "plays" | "best" | "support" | "rankedBest" | "totalM" | "fever";
+  n: number;
+}
+
+/** きせかえ(バンダナ) */
 export interface Skin {
   id: string;
   name: string;
   /** バンダナ色。"rainbow"は特別扱い(時間で色相回転) */
   color: string;
-  cond: { type: "free" | "plays" | "best" | "support"; n: number };
+  cond: UnlockCond;
   condText: string;
 }
 
@@ -127,6 +135,25 @@ export const SKINS: Skin[] = [
   { id: "gold", name: "ゴールド", color: "#ffd166", cond: { type: "best", n: 70 }, condText: "ベスト70mいじょう" },
   { id: "rainbow", name: "レインボー", color: "rainbow", cond: { type: "best", n: 120 }, condText: "うちゅうに とうたつ(120m)" },
   { id: "star", name: "⭐しろ", color: "#f4f7ff", cond: { type: "support", n: 1 }, condText: "かいはつしゃを おうえん" },
+  { id: "sakura", name: "さくら", color: "#ffc7dd", cond: { type: "rankedBest", n: 50 }, condText: "ほんばんベスト50m" },
+  { id: "silver", name: "シルバー", color: "#cdd6e4", cond: { type: "totalM", n: 500 }, condText: "つうさん500m のぼる" },
+  { id: "midnight", name: "ミッドナイト", color: "#31408f", cond: { type: "fever", n: 10 }, condText: "フィーバー10かい" },
+  { id: "black", name: "くろ", color: "#3a4152", cond: { type: "plays", n: 100 }, condText: "100かい あそぶ" },
+];
+
+/** キャラクター(体型・パーツが変わる)。バンダナ(SKINS)とは独立に選べる */
+export interface Chara {
+  id: string;
+  name: string;
+  cond: UnlockCond;
+  condText: string;
+}
+
+export const CHARAS: Chara[] = [
+  { id: "pico", name: "ピコ", cond: { type: "free", n: 0 }, condText: "さいしょから" },
+  { id: "pengin", name: "ペンギン", cond: { type: "rankedBest", n: 60 }, condText: "ほんばんベスト60m" },
+  { id: "obake", name: "おばけ", cond: { type: "best", n: 90 }, condText: "ベスト90m(くものうえ とっぱ)" },
+  { id: "neko", name: "ネコ", cond: { type: "totalM", n: 1000 }, condText: "つうさん1000m のぼる" },
 ];
 
 /**

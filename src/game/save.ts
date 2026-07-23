@@ -2,7 +2,7 @@
  * セーブ: localStorageに {v, data} の封筒形式。
  * ベスト+ローカルランキングTOP10+オンライン用の匿名ID/名前+課金フラグ。
  */
-import type { Skin } from "./config.ts";
+import type { UnlockCond } from "./config.ts";
 
 const KEY = "climb30.save.v1";
 const TOP_N = 10;
@@ -33,6 +33,12 @@ export interface SaveData {
   ticketDate: string;
   /** 選択中のきせかえID(config.SKINS) */
   skin: string;
+  /** 選択中のキャラクターID(config.CHARAS) */
+  chara: string;
+  /** 全モード通算で登った高さ(m)。きせかえ解放条件用 */
+  totalM: number;
+  /** フィーバー発動の累計回数。きせかえ解放条件用 */
+  feverCount: number;
   /** 言語("ja"|"en"。空なら端末言語から自動判定) */
   lang: string;
   /** 「あそびかた」を一度でも閉じたか(初回起動ポップの表示判定) */
@@ -55,6 +61,9 @@ const DEFAULTS: SaveData = {
   tickets: 0,
   ticketDate: "",
   skin: "pink",
+  chara: "pico",
+  totalM: 0,
+  feverCount: 0,
   lang: "",
   seenHowto: false,
   bgmOff: false,
@@ -202,16 +211,23 @@ export function addTickets(n: number): number {
   return save.tickets;
 }
 
-export function isSkinUnlocked(skin: Skin, save: SaveData): boolean {
-  switch (skin.cond.type) {
+/** スキン/キャラ共通の解放判定 */
+export function isUnlocked(cond: UnlockCond, save: SaveData): boolean {
+  switch (cond.type) {
     case "free":
       return true;
     case "plays":
-      return save.playCount >= skin.cond.n;
+      return save.playCount >= cond.n;
     case "best":
-      return save.best >= skin.cond.n;
+      return save.best >= cond.n;
     case "support":
-      return save.supporter >= skin.cond.n;
+      return save.supporter >= cond.n;
+    case "rankedBest":
+      return save.rankedBest >= cond.n;
+    case "totalM":
+      return save.totalM >= cond.n;
+    case "fever":
+      return save.feverCount >= cond.n;
   }
 }
 
@@ -220,6 +236,20 @@ export function setSkin(id: string): SaveData {
   save.skin = id;
   store(save);
   return save;
+}
+
+export function setChara(id: string): SaveData {
+  const save = loadSave();
+  save.chara = id;
+  store(save);
+  return save;
+}
+
+/** フィーバー発動を記録(きせかえ解放条件用) */
+export function addFeverCount(): void {
+  const save = loadSave();
+  save.feverCount += 1;
+  store(save);
 }
 
 export interface ScoreOutcome {
@@ -234,6 +264,7 @@ export function addScore(score: number, ranked: boolean): ScoreOutcome {
   const newBest = score > save.best;
   if (newBest) save.best = score;
   if (ranked && score > save.rankedBest) save.rankedBest = score;
+  save.totalM += score;
   save.playCount += 1;
   save.ranking.push({ score, date: new Date().toISOString() });
   save.ranking.sort((a, b) => b.score - a.score);

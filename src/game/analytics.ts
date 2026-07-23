@@ -6,7 +6,7 @@
  * 計測イベント一覧(README参照):
  *  app_open / play_start{mode} / play_end{mode,score,maxCombo,fever} / fever_start /
  *  ad_shown / ticket_refill / purchase{id} / restore / ranking_view{tab} /
- *  name_change / skin_select{id} / lang_change{lang}
+ *  name_change / skin_select{id} / chara_select{id} / lang_change{lang}
  */
 export type AnalyticsParams = Record<string, string | number | boolean>;
 

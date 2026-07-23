@@ -84,7 +84,9 @@ const JA = {
   noadsToast: "こうこくを なくしました! なんどでも ほんばんへ!",
   supportToast: "おうえん ありがとう! ⭐",
   skinsTitle: "👕 きせかえ",
-  skinsSub: "あそんで あたらしい バンダナを あつめよう",
+  skinsSub: "あそんで キャラや バンダナを あつめよう",
+  tabChara: "キャラ",
+  tabBandana: "バンダナ",
   equipped: "そうびちゅう!",
   settingsTitle: "⚙ せってい",
   changeName: "✏️ なまえを かえる",
@@ -170,7 +172,9 @@ const EN: Record<keyof typeof JA, string> = {
   noadsToast: "Ads removed! Unlimited ranked plays!",
   supportToast: "Thanks for your support! ⭐",
   skinsTitle: "👕 Outfits",
-  skinsSub: "Play to unlock new bandanas",
+  skinsSub: "Play to unlock characters & bandanas",
+  tabChara: "Character",
+  tabBandana: "Bandana",
   equipped: "Equipped!",
   settingsTitle: "⚙ Settings",
   changeName: "✏️ Change name",
@@ -230,6 +234,17 @@ const SKIN_EN: Record<string, { name: string; cond: string }> = {
   gold: { name: "Gold", cond: "Best 70m or higher" },
   rainbow: { name: "Rainbow", cond: "Reach space (120m)" },
   star: { name: "⭐White", cond: "Support the developer" },
+  sakura: { name: "Sakura", cond: "Ranked best 50m" },
+  silver: { name: "Silver", cond: "Climb 500m in total" },
+  midnight: { name: "Midnight", cond: "Trigger Fever 10 times" },
+  black: { name: "Black", cond: "Play 100 times" },
+};
+
+const CHARA_EN: Record<string, { name: string; cond: string }> = {
+  pico: { name: "Pico", cond: "From the start" },
+  pengin: { name: "Penguin", cond: "Ranked best 60m" },
+  obake: { name: "Ghost", cond: "Best 90m (above the clouds)" },
+  neko: { name: "Cat", cond: "Climb 1000m in total" },
 };
 
 export function skinName(id: string, jaName: string): string {
@@ -238,6 +253,14 @@ export function skinName(id: string, jaName: string): string {
 
 export function skinCond(id: string, jaCond: string): string {
   return lang === "ja" ? jaCond : (SKIN_EN[id]?.cond ?? jaCond);
+}
+
+export function charaName(id: string, jaName: string): string {
+  return lang === "ja" ? jaName : (CHARA_EN[id]?.name ?? jaName);
+}
+
+export function charaCond(id: string, jaCond: string): string {
+  return lang === "ja" ? jaCond : (CHARA_EN[id]?.cond ?? jaCond);
 }
 
 const PRODUCT_EN: Record<string, { label: string; desc: string }> = {

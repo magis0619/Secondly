@@ -4,9 +4,10 @@ import { TAU } from "../core/math.ts";
 import { sfxStart } from "../audio/sfx.ts";
 import { setBgm } from "../audio/bgm.ts";
 import { logEvent } from "../game/analytics.ts";
-import { COLORS, TICKETS, skinColor } from "../game/config.ts";
+import { COLORS, TICKETS } from "../game/config.ts";
 import { currentLang, t, toggleLang } from "../game/i18n.ts";
 import { ensureIdentity, getTickets } from "../game/save.ts";
+import { drawChara } from "../render/chara.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
 import { startRanked } from "./adgate.ts";
@@ -30,6 +31,7 @@ export class HomeScene implements Scene {
   private adFree = false;
   private supporter = 0;
   private skin = "pink";
+  private chara = "pico";
   private tickets = 0;
   private skinRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private practiceRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -53,6 +55,7 @@ export class HomeScene implements Scene {
     this.adFree = save.adFree;
     this.supporter = save.supporter;
     this.skin = save.skin;
+    this.chara = save.chara;
     this.tickets = getTickets(TICKETS.DAILY);
     if (!save.seenHowto) this.howto.show(); // 初回起動時だけ自動で開く
   }
@@ -234,61 +237,17 @@ export class HomeScene implements Scene {
     const sy = 1 - sq * 0.22 + (grounded ? 0 : 0.06 * hop);
     const sx = 1 + sq * 0.18 - (grounded ? 0 : 0.04 * hop);
     const armLift = Math.max(0, (hop - 0.25) / 0.75);
-    const blink = Math.sin(this.t * 0.9 + 2) > 0.985;
 
     ctx.save();
     ctx.translate(px, platY - r - 5 * u - hop * 40 * u);
-    ctx.scale(sx, sy);
-
-    // 腕
-    ctx.strokeStyle = COLORS.player;
-    ctx.lineCap = "round";
-    ctx.lineWidth = 8 * u;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * r * 0.7, -r * 0.05);
-      ctx.lineTo(s * r * (1.05 + 0.12 * armLift), -r * 0.05 - armLift * r * 0.95);
-      ctx.stroke();
-    }
-    // 脚
-    ctx.lineWidth = 9 * u;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * r * 0.35, r * 0.85);
-      ctx.lineTo(s * r * 0.42, r * (1.25 - armLift * 0.3));
-      ctx.stroke();
-    }
-    // 体
-    ctx.fillStyle = COLORS.player;
-    ctx.beginPath();
-    ctx.roundRect(-r * 0.82, -r, r * 1.64, r * 2, r * 0.72);
-    ctx.fill();
-    // バンダナ+しっぽ(きせかえ反映)
-    ctx.fillStyle = skinColor(this.skin, this.t);
-    ctx.fillRect(-r * 0.82, -r * 0.72, r * 1.64, r * 0.3);
-    const wob = Math.sin(this.t * 9) * 3.5 * u;
-    ctx.beginPath();
-    ctx.moveTo(r * 0.7, -r * 0.6);
-    ctx.quadraticCurveTo(r * 1.3, -r * 0.5 + wob, r * 1.7, -r * 0.2 + wob * 1.4);
-    ctx.quadraticCurveTo(r * 1.25, -r * 0.28, r * 0.75, -r * 0.38);
-    ctx.fill();
-    // 目とほっぺ
-    ctx.fillStyle = "#1c2743";
-    for (const s of [-1, 1]) {
-      if (blink) {
-        ctx.fillRect(s * r * 0.28 - r * 0.14, -r * 0.22, r * 0.28, 2 * u);
-      } else {
-        ctx.beginPath();
-        ctx.arc(s * r * 0.28, -r * 0.22, r * 0.14, 0, TAU);
-        ctx.fill();
-      }
-    }
-    ctx.fillStyle = "rgba(255,79,163,0.4)";
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(s * r * 0.52, r * 0.05, r * 0.13, 0, TAU);
-      ctx.fill();
-    }
+    drawChara(ctx, {
+      r,
+      u,
+      t: this.t,
+      chara: this.chara,
+      skin: this.skin,
+      pose: { sx, sy, armLift, legTuck: armLift },
+    });
     ctx.restore();
   }
 
