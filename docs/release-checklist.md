@@ -24,8 +24,8 @@
 | Bundle ID / App ID | 🆕 アプリごとに新規作成必須 |
 | AdMobアカウント | ♻️ アカウントは再利用。🆕 このアプリ用の「アプリ」「広告ユニット」は新規作成 |
 | RevenueCatアカウント | ♻️ アカウントは再利用。🆕 このアプリ用の「プロジェクト」は新規作成 |
-| Firebase(Analytics/Firestore) | ♻️ アカウントは再利用。🆕 このアプリ用のプロジェクトは新規(既存流用も可、6.5参照) |
-| GitHub Pages(プライバシーポリシー) | ♻️🆕 リポジトリ/仕組みは再利用可、URLはアプリごとに1本必要(7参照) |
+| Firebase(Analytics/Firestore/Hosting) | ♻️ アカウントは再利用。🆕 このアプリ用のプロジェクトは新規(既存流用も可、6.5参照) |
+| Firebase Hosting(プライバシーポリシー) | ♻️🆕 プロジェクトは6.5と共通化可(複数サイト機能)、公開サイトはアプリごとに1つ必要(7参照) |
 | App Store Connect アプリ登録 | 🆕 アプリごとに新規必須 |
 
 ## 全体の流れ
@@ -144,7 +144,8 @@ export async function showNativeAd(): Promise<boolean> {
 
 ### 6-1. App Store Connect で商品登録(4つ)
 
-「マイアプリ → App → 収益化 → App内課金」で作成:
+「マイApp → 対象App → 左メニュー『収益化』→『App内課金』→『+』」で1商品ずつ作成する。
+種類(消耗型/非消耗型)は**作成後に変更できない**ので、下表どおりに選ぶこと:
 
 | 商品ID(推奨) | 種類 | 参考価格 | 表示名 |
 |---|---|---|---|
@@ -152,6 +153,20 @@ export async function showNativeAd(): Promise<boolean> {
 | `<bundleId>.tip_s` | **消耗型** | ¥200段階 | おうえん(小) |
 | `<bundleId>.tip_m` | **消耗型** | ¥500段階 | おうえん(中) |
 | `<bundleId>.tip_l` | **消耗型** | ¥1,200段階 | おうえん(大) |
+
+各商品の作成フォームで埋める項目(4商品とも同じ流れを繰り返す):
+
+1. **参照名**: 審査やストアには表示されない、自分の管理用ラベル(例「広告じょきょ」)。何でもよい
+2. **製品ID**: 上表の `<bundleId>.xxx`(`<bundleId>` は2章で決めたもの)。**作成後は変更不可**
+3. **価格**: 自由入力ではなく、Appleが用意した価格の一覧から選ぶ方式。¥160/¥480/¥1,200 はそのまま
+   一覧に存在する定番額なので探せばそのまま見つかる(近い額を選べば他の国・地域の価格は自動計算される)
+4. **App Store Connect ローカリゼーション**: 表示名・説明を日本語+英語で登録 → 6-1-a 参照
+5. **審査情報**: スクリーンショット1枚(ストア画面をそのまま撮ってよい)+ Review Notes → 6-1-b 参照
+6. 保存すると状態が「**送信準備未完了**」→ 必須項目を埋めきると「**送信準備完了**」に変わる
+
+> **重要**: App内課金は**単体では初回審査に提出できない**。1本目のビルド(9章のTestFlight/10章の審査提出)
+> と一緒に初めて送信される仕組みなので、「送信準備完了」まで整えたら10章のビルド提出を進めればよい
+> (2本目以降の商品追加はビルドと無関係に単体提出できる)。
 
 ### 6-1-a. 表示名・説明のローカリゼーション(日本語+英語)
 
@@ -216,9 +231,36 @@ export async function showNativeAd(): Promise<boolean> {
 前アプリのRevenueCatアカウントにログイン → CLIMB 30用の**プロジェクトを新規作成**する(アカウント自体は共通)。
 未加入の場合のみアカウント作成から: <https://www.revenuecat.com/>(無料枠で十分)
 
-1. プロジェクト作成 → iOSアプリ追加(Bundle ID)→ App Store Connect の App用共有シークレット/APIキーを接続
-2. 4商品を Products に取り込み、Entitlement `noads` に `.noads` を紐づけ
-3. プラグイン導入: `npm i @revenuecat/purchases-capacitor && npx cap sync ios`
+1. <https://app.revenuecat.com/> にログイン → 左上のプロジェクト切り替え →「+ New Project」→
+   プロジェクト名(例「CLIMB 30」)を入力して作成
+2. 左メニュー「Apps」→「+ New」→「App Store」を選択 → App名(任意)と **Bundle ID**(2章で決めたもの)を入力
+3. App Store Connect 側で共有シークレットを取得: App Store Connect → 対象App →「App情報」→
+   下の方の「**App-Specific Shared Secret**」の「管理」→ 表示された文字列をコピー
+4. 手順2で作ったRevenueCatのApp設定画面に、手順3のシークレットを貼り付けて保存
+5. 左メニュー「Product Catalog → Products」→「+ New」または「Sync from App Store Connect」で
+   6-1で作った4商品を取り込む(App Store Connect側で商品を保存した直後は同期候補に出ないことがあるので、
+   6-1を先に済ませ、少し時間を置いてから同期する)
+6. 左メニュー「Entitlements」→「+ New」→ 識別子 `noads` を作成 →
+   `noads` Entitlement の「Attach」から `.noads` 製品を紐づける
+   (tip系は消耗型で「継続的に持つ権利」が無いため Entitlement 紐付けは不要。
+   購入結果は `purchaseStoreProduct()` の戻り値だけで判定すれば十分)
+7. 左メニュー「API Keys → Apps」タブ → 作成したiOSアプリの
+   **Public app-specific API key** をコピー → 6-3 のコード内 `RC_API_KEY` に貼る
+8. プラグイン導入: `npm i @revenuecat/purchases-capacitor && npx cap sync ios`
+
+### 6-2-b. StoreKitでローカルテスト(推奨・時短)
+
+Sandbox環境(6-4)はApple側の同期待ちで反映まで時間がかかることがある。購入フローのUI/エラー
+ハンドリングだけ素早く試したい場合は、Xcodeの**StoreKit Configuration File**を使うとネットワーク
+接続なしで即座にテストできる:
+
+1. Xcode → File → New → File →「StoreKit Configuration File」を作成(例 `Products.storekit`)
+2. ファイル内で「+」→ 6-1と同じ商品ID・種類・価格を手入力(App Store Connectの内容を写すだけ)
+3. Product → Scheme → Edit Scheme → Run → Options →「StoreKit Configuration」で今のファイルを選択
+4. シミュレータ/実機のデバッグ実行で購入フローを動かすと、確認ダイアログは出るが実際の課金・
+   ネットワーク通信は発生しない
+5. **注意**: RevenueCat SDKはStoreKit Configurationと組み合わせても基本動作するが、環境によっては
+   相性問題が報告されている。うまく動かない場合は素直に6-4のSandboxテストへ切り替える
 
 ### 6-3. `src/game/monetize.ts` の purchase/restore 差し替え(コピペ用)
 
@@ -264,9 +306,27 @@ export async function restorePurchases(): Promise<ProductId[]> {
 
 ### 6-4. 確認(Sandbox)
 
-- App Store Connect → 「ユーザとアクセス → Sandboxテスター」でテストアカウント作成
-- 実機の設定 → App Store → サンドボックスアカウント にログインして購入テスト
-- 確認項目: noads購入→ほんばんが広告なし / アプリ削除→再インストール→**リストアでnoads復活** / tip購入→⭐とお礼表示
+1. **Sandboxテスターの作成**: App Store Connect →「ユーザとアクセス」→「Sandboxテスター」→「+」→
+   実在しない/普段使わないメールアドレスで作成(本物のApple IDと重複不可。日本の価格表で確認したいなら
+   「地域」を日本に設定)
+2. **実機にログイン**:
+   - iOS 16以降: 設定 →「App Store」→ 一番下の「サンドボックスアカウント」から直接ログイン
+     (普段使いのApple IDをサインアウトする必要はない)
+   - iOS 15以前: 設定 → 自分のApple ID → サインアウト → アプリ内で購入しようとした時に出る
+     サインインダイアログにSandboxテスターの認証情報を入力
+3. TestFlightまたはXcodeからのデバッグ実行でアプリを起動 → ストア画面で各商品をタップ →
+   確認ダイアログに「環境: Sandbox」等の注記が出れば正しく接続できている
+4. 確認項目: noads購入→ほんばんが広告なし / アプリ削除→再インストール→**リストアでnoads復活** /
+   tip購入→⭐とお礼表示 / 同じtip商品を連続購入できる(消耗型であることの確認)
+
+#### よくあるハマりどころ
+
+| 症状 | 原因 / 対策 |
+|---|---|
+| 商品が読み込めない(0件) | App Store Connectの契約/税/口座が未完了、または商品が「送信準備完了」段階で審査未提出。反映まで最大24時間かかることがある |
+| 「このApple IDは既に使用されています」 | 本番のApple IDでサインインしたまま購入しようとしている。サンドボックスアカウントでログインし直す |
+| 購入ダイアログに Sandbox の表記がない | 本番環境に接続している(サンドボックスアカウントでのログインができていない) |
+| `restorePurchases()` が空を返す | Entitlement `noads` への製品紐付け忘れ(6-2手順6)。またはRevenueCat側の同期待ち、数秒おいて再試行 |
 
 ## 6.5 分析(Firebase Analytics)と表示名のローカライズ
 
@@ -308,17 +368,44 @@ Xcodeで: プロジェクト → Info → Localizations に **Japanese** を追�
 
 App Store Connect側も「日本語」「英語(米国)」の2ロケールで名前・説明を登録する(`docs/store-listing.md`)。
 
-## 7. プライバシーポリシー(必須) `♻️🆕` 仕組みは再利用可、URLはアプリごとに1本必要
+## 7. プライバシーポリシー(必須) `♻️🆕` プロジェクトは6.5と共通化可、公開サイトはアプリごとに1つ必要
+
+前アプリと同じ **Firebase Hosting** で公開する(前アプリの実績に合わせた標準手順)。
+6.5でFirebaseプロジェクトを用意済みならそのまま流用でき、まだの場合は先に6.5を済ませておくと二度手間にならない。
 
 1. `docs/privacy-policy.md` の `【】` 箇所(連絡先メール等)を埋める
-2. 公開する。一番簡単なのは GitHub Pages。前アプリで使ったリポジトリ/仕組みを流用できる:
-   - **前アプリと同じPagesリポジトリを使い回す場合**: `climb30/index.md` のようにパスを分けて追加(URLも自動でパス別になる)
-   - **新規に用意する場合**: 新規公開リポジトリ(例 `climb30-privacy`)に `index.md` として置く → Settings → Pages で公開
-   - いずれにせよ**URLはアプリごとに別物**になる(前アプリのURLをそのまま使い回すことはできない)
-3. URL を以下 3 箇所に設定:
+2. Firebase CLI導入(初回のみ): `npm i -g firebase-tools && firebase login`(前アプリで使った
+   Googleアカウントでログイン)
+3. Markdownはそのままでは配信されないので、簡単なHTMLに変換して置く:
+   ```bash
+   mkdir -p privacy/public
+   ```
+   `privacy/public/index.html` を新規作成し、`docs/privacy-policy.md` の見出し/本文を
+   `<h1>`/`<h2>`/`<p>` に置き換えて貼る(1ページだけなので手作業で十分。急ぐ場合は
+   本文をまるごと `<pre style="white-space:pre-wrap;font-family:sans-serif;max-width:640px;margin:2em auto">…</pre>`
+   で囲むだけでも公開できる)
+4. **前アプリと同じFirebaseプロジェクトを使い回す場合**(推奨): Hostingの「複数サイト」機能で
+   アプリごとにサイトだけ分ける
+   ```bash
+   firebase use <前アプリと共通のプロジェクトID>
+   firebase hosting:sites:create climb30-privacy
+   firebase target:apply hosting climb30-privacy climb30-privacy
+   ```
+   `firebase.json` の `hosting` に `"target": "climb30-privacy", "public": "privacy/public"` を設定し、
+   ```bash
+   firebase deploy --only hosting:climb30-privacy
+   ```
+   → `https://climb30-privacy.web.app` のようなURLが発行される
+5. **新規にFirebaseプロジェクトを用意する場合**: `firebase init hosting` の対話で新規プロジェクトを選び、
+   公開ディレクトリに `privacy/public` を指定して `firebase deploy`。この場合はデフォルトの
+   `https://<プロジェクトID>.web.app` がそのままURLになる(手順4の複数サイト設定は不要)
+6. いずれにせよ**URLはアプリごとに別物**になる(前アプリのURLをそのまま使い回すことはできない)
+7. URL を以下 3 箇所に設定:
    - `src/game/config.ts` の `LEGAL.privacyUrl`(ストア画面にリンクが出る)
    - App Store Connect のアプリ情報「プライバシーポリシーURL」
    - AdMob のアプリ設定
+
+(GitHub Pagesでも同様に公開できるが、前アプリの実績に合わせてFirebase Hostingを標準手順とした)
 
 ### App Store Connect「Appのプライバシー」申告表の書き方
 

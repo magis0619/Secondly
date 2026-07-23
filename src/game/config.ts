@@ -164,10 +164,10 @@ export const CHARAS: Chara[] = [
 /**
  * 法務系リンク。privacyUrlを設定するとストア画面に「プライバシーポリシー」リンクが出る。
  * 広告/課金ありアプリの審査ではプライバシーポリシーURLが必須(docs/release-checklist.md参照)。
- * テンプレは docs/privacy-policy.md — GitHub Pages等で公開してURLをここに貼る。
+ * テンプレは docs/privacy-policy.md — Firebase Hosting等で公開してURLをここに貼る(手順は7章)。
  */
 export const LEGAL = {
-  privacyUrl: "", // 例: "https://<ユーザー名>.github.io/climb30-privacy/"
+  privacyUrl: "", // 例: "https://climb30-privacy.web.app/"
 };
 
 export const ONLINE = {
