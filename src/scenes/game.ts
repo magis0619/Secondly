@@ -90,6 +90,8 @@ export class GameScene implements Scene {
   private combo = 0;
   private maxCombo = 0;
   private feverT = 0;
+  /** フィーバー背景グローの追従値(0→1)。開始で立ち上がり、終了時になめらかに0へ戻る */
+  private feverGlow = 0;
   private feverCount = 0;
   private skin = "pink";
   private chara = "pico";
@@ -137,6 +139,10 @@ export class GameScene implements Scene {
           this.tower.h = h;
           this.tower.maxH = Math.max(this.tower.maxH, h);
           this.camH = h;
+        },
+        fever: () => {
+          this.feverT = FEVER.TIME;
+          this.tower.setFever(true);
         },
         state: () => ({
           scene: "game",
@@ -190,6 +196,8 @@ export class GameScene implements Scene {
         setBgm("game");
       }
     }
+    // 背景グローの追従。開始で0→1に立ち上がり、終了(自然/ミス両方)で1→0へなめらかに戻る
+    this.feverGlow += ((this.feverT > 0 ? 1 : 0) - this.feverGlow) * damp(8, dt);
 
     // ホップ中のトレイル(残像パーティクル)
     if (this.tower.anim.kind === "hop") {
@@ -475,6 +483,68 @@ export class GameScene implements Scene {
         ctx.stroke();
       }
     }
+
+    // ぎんが: ゆっくり回る渦巻き銀河(高度195m)+散らばる明るい星
+    {
+      const gy = this.py(195, 0.15);
+      if (onScreen(gy, 120 * u)) {
+        const gx = w * 0.6;
+        const rot = this.t * 0.12;
+        // 星雲のやわらかいグロー
+        const neb = ctx.createRadialGradient(gx, gy, 4 * u, gx, gy, 80 * u);
+        neb.addColorStop(0, css(hexRgb("#c774ff"), 0.28));
+        neb.addColorStop(0.5, css(hexRgb("#5a2b8c"), 0.14));
+        neb.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = neb;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 80 * u, 0, TAU);
+        ctx.fill();
+        // 渦の腕(2本、対数らせん風)
+        for (let arm = 0; arm < 2; arm++) {
+          for (let k = 2; k < 46; k++) {
+            const ang = k * 0.34 + arm * Math.PI + rot;
+            const rad = k * 1.35 * u;
+            const sx = gx + Math.cos(ang) * rad;
+            const sy = gy + Math.sin(ang) * rad * 0.55;
+            const c = mix(hexRgb("#ffffff"), hexRgb("#c774ff"), Math.min(k / 46, 1));
+            ctx.fillStyle = css(c, 0.85 * (1 - k / 52));
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(2.4 - k / 26, 0.7) * u, 0, TAU);
+            ctx.fill();
+          }
+        }
+        // 明るいコア
+        const core = ctx.createRadialGradient(gx, gy, 0, gx, gy, 14 * u);
+        core.addColorStop(0, "rgba(255,255,255,0.95)");
+        core.addColorStop(0.4, css(hexRgb("#ffe0ff"), 0.7));
+        core.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 14 * u, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
+  /** フィーバー中に背景へ重ねる金の放射グロー(虹シグネチャ入り)。feverGlowで淡くフェード */
+  private drawFeverGlow(ctx: CanvasRenderingContext2D): void {
+    const g = this.feverGlow;
+    if (g <= 0.01) return;
+    const { w, h: H } = this.app.vp;
+    const cx = w / 2;
+    const cy = H * 0.42;
+    const pulse = 0.85 + 0.15 * Math.sin(this.t * 6);
+    const hueDeg = Math.floor((this.t * 120) % 360);
+    const rad = Math.max(w, H) * 0.8;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter"; // 加算で背景を明るく輝かせる
+    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    grd.addColorStop(0, css(hexRgb(COLORS.gold), 0.3 * g * pulse));
+    grd.addColorStop(0.4, `hsla(${hueDeg}, 90%, 62%, ${0.12 * g * pulse})`);
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, H);
+    ctx.restore();
   }
 
   private drawPlatform(ctx: CanvasRenderingContext2D, h: number, x: number, y: number): void {
@@ -547,13 +617,29 @@ export class GameScene implements Scene {
         ctx.arc(x0 + pw * (0.2 + i * 0.3), y + 1 * u, (4 + (i % 2) * 2) * u, Math.PI, 0);
         ctx.fill();
       }
-    } else {
+    } else if (zone.deco === "space") {
       // クリスタル
       ctx.fillStyle = css(tint, 0.85);
       ctx.beginPath();
       ctx.moveTo(dx, y - 8 * u);
       ctx.lineTo(dx + 3.4 * u, y);
       ctx.lineTo(dx - 3.4 * u, y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      // ぎんが: きらめく4点スター
+      const tw = 0.55 + 0.45 * Math.sin(this.t * 4 + h * 1.3);
+      const sr = (3.2 + tw * 1.6) * u;
+      ctx.fillStyle = css(mix(hexRgb("#ffffff"), tint, 0.35), 0.7 + 0.3 * tw);
+      ctx.beginPath();
+      ctx.moveTo(dx, y - sr);
+      ctx.lineTo(dx + sr * 0.32, y - sr * 0.32);
+      ctx.lineTo(dx + sr, y);
+      ctx.lineTo(dx + sr * 0.32, y + sr * 0.32);
+      ctx.lineTo(dx, y + sr);
+      ctx.lineTo(dx - sr * 0.32, y + sr * 0.32);
+      ctx.lineTo(dx - sr, y);
+      ctx.lineTo(dx - sr * 0.32, y - sr * 0.32);
       ctx.closePath();
       ctx.fill();
     }
@@ -630,6 +716,7 @@ export class GameScene implements Scene {
     const tw = this.tower;
 
     this.drawBackground(ctx);
+    this.drawFeverGlow(ctx);
 
     ctx.save();
     ctx.translate(this.juice.offX, this.juice.offY);

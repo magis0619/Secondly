@@ -242,6 +242,7 @@ const ZONE_EN: Record<string, string> = {
   よぞら: "Night Sky",
   くものうえ: "Above the Clouds",
   うちゅう: "Space",
+  ぎんが: "Galaxy",
 };
 
 export function zoneName(jaName: string): string {

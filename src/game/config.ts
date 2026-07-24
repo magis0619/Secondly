@@ -72,7 +72,7 @@ export interface Zone {
   skyBottom: string;
   /** 足場に薄く乗せる色 */
   tint: string;
-  deco: "dusk" | "night" | "clouds" | "space";
+  deco: "dusk" | "night" | "clouds" | "space" | "galaxy";
 }
 
 export const ZONES: Zone[] = [
@@ -80,6 +80,7 @@ export const ZONES: Zone[] = [
   { from: 35, name: "よぞら", skyTop: "#141d3e", skyBottom: "#233060", tint: "#38e1ff", deco: "night" },
   { from: 75, name: "くものうえ", skyTop: "#2b2558", skyBottom: "#54418c", tint: "#b48cff", deco: "clouds" },
   { from: 120, name: "うちゅう", skyTop: "#0a0f24", skyBottom: "#131a38", tint: "#ff4fa3", deco: "space" },
+  { from: 170, name: "ぎんが", skyTop: "#050416", skyBottom: "#241046", tint: "#c774ff", deco: "galaxy" },
 ];
 
 /** ゾーン境界の色ブレンド幅(m) */
