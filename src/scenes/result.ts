@@ -234,7 +234,7 @@ export class ResultScene implements Scene {
       else this.app.manager.switchTo(new GameScene(this.app, "practice"));
     }, COLORS.accent2);
     add(t("shareBtn"), () => void shareResult(p.score, ranked), "#3b74d0", "#fff");
-    add(t("rankingBtn"), () => this.app.manager.switchTo(new RankingScene(this.app, this.params.rank)), "#25314f", COLORS.text);
+    add(t("rankingBtn"), () => this.app.manager.switchTo(new RankingScene(this.app, this.params.rank, ranked ? "world" : "local")), "#25314f", COLORS.text);
     add(t("toHome"), () => this.app.manager.switchTo(new HomeScene(this.app)), "#25314f", COLORS.text);
     for (const b of this.buttons) drawButton(ctx, u, b.rect, b.label, { bg: b.bg, fg: b.fg });
     drawFx(ctx, vp, this.fx);

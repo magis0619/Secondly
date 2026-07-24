@@ -30,15 +30,15 @@ export class RankingScene implements Scene {
     private app: App,
     /** 直前のプレイの順位(ローカルタブのハイライト用)。なければ-1 */
     private highlightRank = -1,
+    /** 初期タブ。未指定ならオンライン時world/オフラインlocal(れんしゅうからはlocalを渡す) */
+    private initialTab?: Tab,
   ) {}
 
   enter(): void {
     setBgm("menu");
     this.save = ensureIdentity();
-    if (onlineEnabled()) {
-      this.tab = "world";
-      this.loadWorld();
-    }
+    this.tab = this.initialTab ?? (onlineEnabled() ? "world" : "local");
+    if (this.tab === "world" && onlineEnabled()) this.loadWorld();
     logEvent("ranking_view", { tab: this.tab });
   }
 
