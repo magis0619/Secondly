@@ -3,7 +3,7 @@ import type { Scene } from "../core/scene.ts";
 import { TAU } from "../core/math.ts";
 import { sfxStart } from "../audio/sfx.ts";
 import { setBgm } from "../audio/bgm.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { currentLang, t, toggleLang } from "../game/i18n.ts";
 import { ensureIdentity, getTickets, loadSave } from "../game/save.ts";
@@ -61,6 +61,7 @@ export class HomeScene implements Scene {
   }
 
   enter(): void {
+    logScreen("home");
     setBgm("menu");
     this.tickets = getTickets(TICKETS.DAILY);
 
@@ -71,7 +72,7 @@ export class HomeScene implements Scene {
       this.langpick.onSelect = () => {
         const save = ensureIdentity(t("defaultNamePrefix"));
         this.applySave(save);
-        if (!save.seenHowto) this.howto.show();
+        if (!save.seenHowto) this.howto.show("auto");
       };
       this.langpick.show();
       return;
@@ -79,7 +80,7 @@ export class HomeScene implements Scene {
 
     const save = ensureIdentity(t("defaultNamePrefix"));
     this.applySave(save);
-    if (!save.seenHowto) this.howto.show(); // 初回起動時だけ自動で開く
+    if (!save.seenHowto) this.howto.show("auto"); // 初回起動時だけ自動で開く
   }
 
   update(dt: number): void {

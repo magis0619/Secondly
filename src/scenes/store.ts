@@ -2,7 +2,7 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxBest, sfxStart } from "../audio/sfx.ts";
 import { setBgm } from "../audio/bgm.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, LEGAL } from "../game/config.ts";
 import { hapticHeavy } from "../game/haptics.ts";
 import { productDesc, productLabel, t } from "../game/i18n.ts";
@@ -32,6 +32,7 @@ export class StoreScene implements Scene {
   }
 
   enter(): void {
+    logScreen("store");
     setBgm("menu");
     this.save = loadSave();
     // 開発ビルドのみ: 御礼オーバーレイの見た目確認用フック(web版purchase()はfalseを返すため)
@@ -54,8 +55,12 @@ export class StoreScene implements Scene {
     if (this.busy) return;
     if (p.id === "noads" && this.save.adFree) return;
     this.busy = true;
+    // 購入意思の記録。product_tap と purchase_result(ok:false) の差分が
+    // 「決済シートまで行ったがキャンセルした」= 価格/文言の見直し材料になる
+    logEvent("product_tap", { id: p.id });
     void purchase(p).then((ok) => {
       this.busy = false;
+      logEvent("purchase_result", { id: p.id, ok });
       if (!ok) return;
       logEvent("purchase", { id: p.id });
       if (p.id === "noads") {

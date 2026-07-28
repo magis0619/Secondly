@@ -7,7 +7,7 @@ import { Fx } from "../fx/particles.ts";
 import { COLORS } from "../game/config.ts";
 import { hapticHeavy } from "../game/haptics.ts";
 import { t } from "../game/i18n.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { requestReview } from "../game/monetize.ts";
 import { shareResult } from "../game/share.ts";
 import { loadSave } from "../game/save.ts";
@@ -49,6 +49,7 @@ export class ResultScene implements Scene {
   ) {}
 
   enter(): void {
+    logScreen("result");
     setBgm("menu");
   }
 

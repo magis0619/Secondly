@@ -1,6 +1,7 @@
 import type { App } from "../app.ts";
 import { clamp } from "../core/math.ts";
 import { sfxStart } from "../audio/sfx.ts";
+import { logEvent } from "../game/analytics.ts";
 import { COLORS } from "../game/config.ts";
 import { t } from "../game/i18n.ts";
 import { markHowtoSeen } from "../game/save.ts";
@@ -130,14 +131,20 @@ export class HowToModal {
   private t = 0;
   open = false;
   private page = 0;
+  private source: "auto" | "settings" = "settings";
   private nextRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private closeRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
-  show(): void {
+  /** source: "auto"=初回起動の自動表示 / "settings"=設定から任意で開いた */
+  show(source: "auto" | "settings" = "settings"): void {
     this.open = true;
     this.page = 0;
     this.t = 0;
+    this.source = source;
+    // オンボーディングの離脱分析用。表示→各ページ到達→完読(とじる)を対で取る
+    logEvent("howto_show", { source });
+    logEvent("howto_page", { n: 1, source });
   }
 
   update(dt: number): void {
@@ -269,6 +276,7 @@ export class HowToModal {
         sfxStart();
         this.page++;
         this.t = 0;
+        logEvent("howto_page", { n: this.page + 1, source: this.source });
       }
     } else {
       if (inRect(this.backRect, x, y)) {
@@ -279,6 +287,8 @@ export class HowToModal {
         sfxStart();
         this.open = false;
         markHowtoSeen();
+        // 完読(最終ページのとじる)。howto_showとの差分が離脱率になる
+        logEvent("howto_done", { lastPage: this.page + 1, source: this.source });
       }
     }
     return true; // 開いている間は背後のボタンへタップを通さない

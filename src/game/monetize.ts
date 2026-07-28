@@ -52,7 +52,13 @@ export async function ensureAdInit(): Promise<void> {
   await AdMob.initialize();
 }
 
-/** ネイティブ広告(インタースティシャル)を表示し、閉じられたらtrue。AD_STUB=falseのときだけ呼ばれる */
+/**
+ * ネイティブ広告(インタースティシャル)を表示する。AD_STUB=falseのときだけ呼ばれる。
+ * 戻り値は「実際に広告を表示できたか」。在庫不足や読み込み失敗ではfalseになる。
+ * **呼び出し側はfalseでもゲームを止めないこと**(報酬は与えて先に進める)。
+ * falseを握りつぶして常にtrueを返すと、計測上フィルレート(広告が出た割合)が
+ * 分からなくなるため、ここでは正直な値を返し、進行の判断は呼び出し側に任せる。
+ */
 export async function showNativeAd(): Promise<boolean> {
   try {
     await ensureAdInit();
@@ -61,7 +67,7 @@ export async function showNativeAd(): Promise<boolean> {
     return true;
   } catch (e) {
     console.warn("[monetize] showNativeAd failed", e); // Xcodeコンソールで原因を確認する用
-    return true; // 広告の読み込み失敗でゲームを止めない(そのまま開始)
+    return false;
   }
 }
 

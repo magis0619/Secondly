@@ -2,7 +2,7 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxGo, sfxStart } from "../audio/sfx.ts";
 import { setBgm } from "../audio/bgm.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { t } from "../game/i18n.ts";
 import { AD_STUB, STUB_AD_SEC, showNativeAd } from "../game/monetize.ts";
@@ -42,6 +42,8 @@ export class AdGateScene implements Scene {
   private mode: "confirm" | "ad" = "confirm";
   private adLeft = STUB_AD_SEC;
   private started = false;
+  /** 計測用: 何らかの形でこの画面を「決着」させたか(完了 or 明示的な離脱) */
+  private exited = false;
   private watchRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private storeRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -49,8 +51,18 @@ export class AdGateScene implements Scene {
   constructor(private app: App) {}
 
   enter(): void {
+    logScreen("adgate");
+    // 収益ファネルの起点。adgate_view → ad_start → ad_result → ad_shown の差分が離脱
+    logEvent("adgate_view");
     setBgm("menu");
     void scheduleTicketReminder(); // チケット切れを見せた=明日の回復を通知でリマインド
+  }
+
+  /** 広告を見ずにこの画面を離れた=収益機会の損失。行き先も添えて記録する */
+  private logExit(to: string): void {
+    if (this.exited) return;
+    this.exited = true;
+    logEvent("adgate_exit", { to });
   }
 
   private grantAndStart(): void {
@@ -58,6 +70,7 @@ export class AdGateScene implements Scene {
     this.started = true;
     logEvent("ad_shown");
     logEvent("ticket_refill", { n: TICKETS.AD_REWARD });
+    this.exited = true; // 正常完了。exit()での離脱計上を防ぐ
     addTickets(TICKETS.AD_REWARD);
     useTicket(); // このまま1回ぶん使って開始
     sfxGo();
@@ -147,19 +160,25 @@ export class AdGateScene implements Scene {
     if (this.mode !== "confirm") return;
     if (inRect(this.watchRect, x, y)) {
       sfxStart();
+      logEvent("ad_start"); // 視聴の意思あり。ad_resultとの差分が「見ようとしたが出なかった」
       if (AD_STUB) {
         this.mode = "ad";
         this.adLeft = STUB_AD_SEC;
       } else {
         void showNativeAd().then((ok) => {
-          if (ok) this.grantAndStart();
+          // okは「広告が実際に表示できたか」。読み込み失敗でもゲームは進める設計だが、
+          // 計測上は区別しないとフィルレート(在庫不足)が見えなくなる
+          logEvent("ad_result", { ok });
+          this.grantAndStart();
         });
       }
     } else if (inRect(this.storeRect, x, y)) {
       sfxStart();
+      this.logExit("store");
       this.app.manager.switchTo(new StoreScene(this.app));
     } else if (inRect(this.backRect, x, y)) {
       sfxStart();
+      this.logExit("home");
       this.app.manager.switchTo(new HomeScene(this.app));
     }
   }

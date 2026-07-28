@@ -103,7 +103,9 @@ export class LanguagePickerModal {
     else if (inRect(this.enRect, x, y)) picked = "en";
     if (picked) {
       setLang(picked);
-      logEvent("lang_change", { lang: picked });
+      // 初回の言語選択は専用イベント。設定/ホームでの後からの切替(lang_change)と混ざると
+      // 「初回で何語を選んだか」「選ばずに離脱したか」が測れなくなるため分けている
+      logEvent("lang_pick", { lang: picked });
       sfxStart();
       this.open = false;
       this.onSelect?.(picked);

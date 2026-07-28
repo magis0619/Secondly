@@ -2,7 +2,7 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxStart } from "../audio/sfx.ts";
 import { setBgm } from "../audio/bgm.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS } from "../game/config.ts";
 import { t } from "../game/i18n.ts";
 import type { WorldEntry } from "../game/online.ts";
@@ -35,6 +35,7 @@ export class RankingScene implements Scene {
   ) {}
 
   enter(): void {
+    logScreen("ranking");
     setBgm("menu");
     this.save = ensureIdentity();
     this.tab = this.initialTab ?? (onlineEnabled() ? "world" : "local");

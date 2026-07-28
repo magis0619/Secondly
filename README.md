@@ -104,7 +104,22 @@ service cloud.firestore {
 ## 分析(アナリティクス)
 
 `src/game/analytics.ts` の `logEvent()` に集約(開発ビルドはconsole+`window.__analytics`のみ。iOSでのFirebase Analytics接続は `docs/release-checklist.md` 参照)。イベント:
-`app_open` / `play_start{mode}` / `play_end{mode,score,maxCombo,fever}` / `fever_start` / `ad_shown` / `ticket_refill` / `ticket_refund` / `purchase{id}` / `restore` / `ranking_view{tab}` / `name_change` / `skin_select{id}` / `chara_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `js_error{msg}`
+- **基本**: `app_open` / `screen_view{screen}` / `js_error{msg}`
+- **プレイ**: `play_start{mode}` / `play_end{mode,score,maxCombo,fever,misses,sec,zone}` / `play_quit{mode,score,misses,sec}` / `fever_start`
+- **オンボーディング**: `lang_pick{lang}` / `howto_show{source}` / `howto_page{n,source}` / `howto_done{lastPage,source}`
+- **広告**: `adgate_view` / `ad_start` / `ad_result{ok}` / `adgate_exit{to}` / `ad_shown` / `ticket_refill{n}` / `ticket_refund`
+- **課金**: `product_tap{id}` / `purchase_result{id,ok}` / `purchase{id}` / `restore`
+- **その他**: `ranking_view{tab}` / `name_change` / `skin_select{id}` / `chara_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `share{mode,score}`
+
+**離脱分析の設計**: 画面遷移は `screen_view`(各Sceneの`enter()`で送信、Firebaseの経路探索が使える)。
+ファネルは「開始イベント」と「結果イベント」を必ず対で送るため、途中で消えるセッションが無い:
+
+| ファネル | 開始 | 結果 | 差分が意味するもの |
+|---|---|---|---|
+| オンボーディング | `howto_show` | `howto_done` | チュートリアル離脱率(`howto_page`で何ページ目か特定) |
+| 広告(収益の要) | `adgate_view` → `ad_start` | `ad_result{ok}` → `ad_shown` | ゲート離脱(`adgate_exit{to}`)/ 広告在庫切れ(`ok:false`) |
+| 課金 | `product_tap{id}` | `purchase_result{id,ok}` | 決済シートでのキャンセル率(商品別) |
+| プレイ | `play_start` | `play_end` or `play_quit` | 途中で投げた割合と、その時点の高度・ミス数 |
 
 不正なJavaScriptエラー(`window.onerror`/`unhandledrejection`)も自動で`js_error`として送られる(本番の不具合検知用)。
 

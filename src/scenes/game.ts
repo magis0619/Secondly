@@ -7,7 +7,7 @@ import {
 import { setBgm } from "../audio/bgm.ts";
 import { Fx } from "../fx/particles.ts";
 import { Juice } from "../fx/juice.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, FEVER, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND } from "../game/config.ts";
 import { hapticHeavy, hapticLight, hapticMedium } from "../game/haptics.ts";
 import { t, zoneName } from "../game/i18n.ts";
@@ -89,6 +89,8 @@ export class GameScene implements Scene {
   /** フィーバー: ノーミス連続ホップ数 / 残り時間 */
   private combo = 0;
   private maxCombo = 0;
+  /** 難易度チューニング用: このプレイでのミス(落下)回数 */
+  private misses = 0;
   private feverT = 0;
   /** フィーバー背景グローの追従値(0→1)。開始で立ち上がり、終了時になめらかに0へ戻る */
   private feverGlow = 0;
@@ -116,6 +118,7 @@ export class GameScene implements Scene {
   private visListenerTimer: ReturnType<typeof setTimeout> | undefined;
 
   enter(): void {
+    logScreen("game");
     const save = ensureIdentity();
     this.best = save.best;
     this.skin = save.skin;
@@ -281,6 +284,7 @@ export class GameScene implements Scene {
         }
         case "fall": {
           this.combo = 0;
+          this.misses++;
           if (this.feverT > 0) {
             this.feverT = 0; // ミスでフィーバー即終了
             this.tower.setFever(false);
@@ -312,7 +316,16 @@ export class GameScene implements Scene {
       if (this.endT >= GAME.END_DELAY && !this.finished) {
         this.finished = true;
         const score = this.tower.maxH;
-        logEvent("play_end", { mode: this.mode, score, maxCombo: this.maxCombo, fever: this.feverCount });
+        // zone/misses は難易度の詰まりどころ、sec は最後まで遊んだかの判定に使う
+        logEvent("play_end", {
+          mode: this.mode,
+          score,
+          maxCombo: this.maxCombo,
+          fever: this.feverCount,
+          misses: this.misses,
+          zone: ZONES[zoneAt(score)].name,
+          sec: Math.round(GAME.TIME - Math.max(this.tower.timeLeft, 0)),
+        });
         const outcome = addScore(score, this.mode === "ranked");
         // ほんばんのみ世界へ送信。判定はsyncBest(rankedBest > lastSynced)。
         // 失敗しても次回のほんばん終了時かランキング画面で自動再送される。
@@ -926,6 +939,14 @@ export class GameScene implements Scene {
       if (inRect(this.resumeRect, x, y)) {
         this.confirmOpen = false;
       } else if (inRect(this.quitRect, x, y)) {
+        // 途中離脱。これを取らないとplay_startだけ残ってplay_endが来ない"消えたセッション"になり、
+        // 「どのくらい登った時点で投げたか」が分からなくなる
+        logEvent("play_quit", {
+          mode: this.mode,
+          score: this.tower.maxH,
+          misses: this.misses,
+          sec: Math.round(GAME.TIME - Math.max(this.tower.timeLeft, 0)),
+        });
         // ほんばんで1歩も登らずに離脱した場合はチケットを返す(誤タップ・電話等での
         // 理不尽な消費を防ぐ)。広告除去済みはチケットを使っていないので対象外
         if (this.mode === "ranked" && this.tower.maxH === 0 && !loadSave().adFree) {

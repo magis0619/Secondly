@@ -2,7 +2,7 @@ import type { App } from "../app.ts";
 import type { Scene } from "../core/scene.ts";
 import { sfxStart, setSfxMuted } from "../audio/sfx.ts";
 import { setBgm, setBgmMuted } from "../audio/bgm.ts";
-import { logEvent } from "../game/analytics.ts";
+import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, LEGAL, ONLINE, VERSION } from "../game/config.ts";
 import { t, toggleLang } from "../game/i18n.ts";
 import { loadSave, setPlayerName, toggleBgmOff, toggleSfxOff } from "../game/save.ts";
@@ -26,6 +26,7 @@ export class SettingsScene implements Scene {
   }
 
   enter(): void {
+    logScreen("settings");
     setBgm("menu");
     const save = loadSave();
     this.name = save.playerName;
@@ -85,7 +86,7 @@ export class SettingsScene implements Scene {
     );
     add(
       () => t("howtoRow"),
-      () => this.howto.show(),
+      () => this.howto.show("settings"),
     );
     if (LEGAL.privacyUrl) {
       add(
