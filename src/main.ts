@@ -10,11 +10,18 @@ import { setSfxMuted } from "./audio/sfx.ts";
 import { logEvent } from "./game/analytics.ts";
 import { COLORS, LEGAL, ONLINE } from "./game/config.ts";
 import { initLang } from "./game/i18n.ts";
+import { ensureAdInit } from "./game/monetize.ts";
 import { loadSave } from "./game/save.ts";
 import { HomeScene } from "./scenes/home.ts";
 
 initLang();
 logEvent("app_open");
+
+// ATT(トラッキング許可)ダイアログを起動直後に出す。ほんばん(広告)まで遊ばないと
+// 一度も出ない状態だと審査で「見つからない」と指摘される(Guideline 2.1)ため、
+// 広告を出す画面まで待たず早期に発火させる。起動直後すぎるとダイアログが正しく
+// 出ないことがあるため少し遅らせる(iOSはウィンドウがkeyになってから出すのが安全)
+setTimeout(() => { void ensureAdInit().catch(() => {}); }, 600);
 
 // サウンド設定をセーブから反映(オフのまま次回起動しても無音を維持する)
 {

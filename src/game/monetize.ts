@@ -38,12 +38,18 @@ const INTERSTITIAL_ID = "ca-app-pub-6400037812686003/9792711609";
 // テスト中はGoogle公式のテストID: ca-app-pub-3940256099942544/4411468910
 
 let adInit = false;
-async function ensureAdInit(): Promise<void> {
+/**
+ * ATT許可ダイアログ→AdMob初期化、の順で1回だけ実行する(冪等)。
+ * Appleの審査要件により、トラッキング可能なデータ収集(=AdMob初期化)より前にATTを聞く必要がある。
+ * main.tsから起動直後に一度呼ぶ(審査で「ATTダイアログが見つからない」とならないよう、
+ * 広告を出す深い画面まで待たずに早期発火させる)。showNativeAd()からも安全網として呼ぶため冪等にしてある
+ */
+export async function ensureAdInit(): Promise<void> {
   if (adInit) return;
   adInit = true;
-  await AdMob.initialize();
   // ATT(トラッキング許可)ダイアログ。拒否されても非パーソナライズ広告が出るだけ
   try { await AdMob.requestTrackingAuthorization(); } catch { /* iOS以外 */ }
+  await AdMob.initialize();
 }
 
 /** ネイティブ広告(インタースティシャル)を表示し、閉じられたらtrue。AD_STUB=falseのときだけ呼ばれる */
