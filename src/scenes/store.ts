@@ -150,7 +150,8 @@ export class StoreScene implements Scene {
     ctx.font = `700 ${11 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(t("restore"), w / 2, this.restoreRect.y + 15 * u);
     ctx.font = `700 ${10 * u}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText(t("devPurchaseNote"), w / 2, this.restoreRect.y + 40 * u);
+    // 擬似購入の注記は開発ビルドだけ(本番はRevenueCat経由の実課金なので出さない)
+    if (import.meta.env.DEV) ctx.fillText(t("devPurchaseNote"), w / 2, this.restoreRect.y + 40 * u);
     // プライバシーポリシー(URL設定時のみ。広告/課金ありアプリの審査必須要件)
     if (LEGAL.privacyUrl) {
       this.privacyRect = { x: w / 2 - 120 * u, y: this.restoreRect.y + 54 * u, w: 240 * u, h: 26 * u };
