@@ -3,6 +3,7 @@
  * ベスト+ローカルランキングTOP10+オンライン用の匿名ID/名前+課金フラグ。
  */
 import type { UnlockCond } from "./config.ts";
+import { SKINS, STREAK, TICKETS } from "./config.ts";
 
 const KEY = "climb30.save.v1";
 const TOP_N = 10;
@@ -46,7 +47,19 @@ export interface SaveData {
   /** サウンド設定 */
   bgmOff: boolean;
   sfxOff: boolean;
+  /** 連続ログイン: 現在の日数 / 最長記録 / 最後にチェックインした日(YYYY-MM-DD) */
+  streak: number;
+  bestStreak: number;
+  lastLogin: string;
+  /** プレイ中に並走するゴースト: "self"=自分のベスト / "world"=世界1位 / "off" */
+  ghostMode: GhostMode;
+  /** 参加中のともだちルームのコード(空=未参加) */
+  room: string;
+  /** ルームへ送信済みの内容("コード|名前|スコア")。変わった時だけ再送する */
+  roomSynced: string;
 }
+
+export type GhostMode = "self" | "world" | "off";
 
 const DEFAULTS: SaveData = {
   best: 0,
@@ -68,6 +81,12 @@ const DEFAULTS: SaveData = {
   seenHowto: false,
   bgmOff: false,
   sfxOff: false,
+  streak: 0,
+  bestStreak: 0,
+  lastLogin: "",
+  ghostMode: "self",
+  room: "",
+  roomSynced: "",
 };
 
 export function loadSave(): SaveData {
@@ -211,6 +230,68 @@ export function addTickets(n: number): number {
   return save.tickets;
 }
 
+export interface StreakResult {
+  /** 今日の時点の連続日数 */
+  streak: number;
+  /** 今日もらったチケット数(初日・連続が途切れた日は0) */
+  bonus: number;
+  /** この更新で「ほのお」(7日)が解放された */
+  unlockedFlame: boolean;
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * 連続ログインのチェックイン。1日に1回だけ進み、同じ日の2回目以降はnullを返す。
+ * 昨日チェックイン済みなら+1、それ以外(初回/空いた)は1に戻る。2日目以降はチケットを付与する。
+ * 付与前に日付リセットを済ませる(新しい日のチケットが後でDAILYに上書きされるのを防ぐ)
+ */
+export function checkInStreak(): StreakResult | null {
+  const save = loadSave();
+  const today = todayKey();
+  if (save.lastLogin === today) return null;
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const prevBest = save.bestStreak;
+  save.streak = save.lastLogin === dayKey(y) ? save.streak + 1 : 1;
+  save.bestStreak = Math.max(save.bestStreak, save.streak);
+  save.lastLogin = today;
+  let bonus = 0;
+  if (save.streak >= 2) bonus = save.streak % STREAK.WEEK === 0 ? STREAK.WEEK_BONUS : STREAK.DAILY_BONUS;
+  if (save.ticketDate !== today) {
+    save.tickets = TICKETS.DAILY;
+    save.ticketDate = today;
+  }
+  save.tickets += bonus;
+  store(save);
+  const flameDays = SKINS.find((k) => k.id === "flame")?.cond.n ?? 7;
+  return { streak: save.streak, bonus, unlockedFlame: prevBest < flameDays && save.bestStreak >= flameDays };
+}
+
+export function setGhostMode(mode: GhostMode): SaveData {
+  const save = loadSave();
+  save.ghostMode = mode;
+  store(save);
+  return save;
+}
+
+/** 参加中ルームの設定(空文字で退出)。コードが変わるので送信済みマークも消す */
+export function setRoom(code: string): SaveData {
+  const save = loadSave();
+  save.room = code;
+  save.roomSynced = "";
+  store(save);
+  return save;
+}
+
+export function markRoomSynced(key: string): void {
+  const save = loadSave();
+  save.roomSynced = key;
+  store(save);
+}
+
 /** スキン/キャラ共通の解放判定 */
 export function isUnlocked(cond: UnlockCond, save: SaveData): boolean {
   switch (cond.type) {
@@ -228,6 +309,8 @@ export function isUnlocked(cond: UnlockCond, save: SaveData): boolean {
       return save.totalM >= cond.n;
     case "fever":
       return save.feverCount >= cond.n;
+    case "streak":
+      return save.bestStreak >= cond.n;
   }
 }
 

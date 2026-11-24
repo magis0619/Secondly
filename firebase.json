@@ -1,14 +1,25 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": [
     {
       "target": "climb30-privacy",
       "public": "privacy/public",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
     },
     {
       "target": "climb30-marketing",
       "public": "marketing/public",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
     }
   ]
 }

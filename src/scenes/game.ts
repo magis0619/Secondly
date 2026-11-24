@@ -12,7 +12,9 @@ import { COLORS, FEVER, GAME, LAYOUT, MOTION, ZONES, ZONE_BLEND } from "../game/
 import { hapticHeavy, hapticLight, hapticMedium } from "../game/haptics.ts";
 import { t, zoneName } from "../game/i18n.ts";
 import { addFeverCount, addScore, addTickets, ensureIdentity, loadSave } from "../game/save.ts";
-import { onlineEnabled, syncBest } from "../game/online.ts";
+import type { GhostRun } from "../game/ghost.ts";
+import { GhostRecorder, ghostAt, loadGhost, saveGhostIfBest } from "../game/ghost.ts";
+import { fetchTopGhost, onlineEnabled, syncBest, syncRoom } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
 import { drawChara } from "../render/chara.ts";
@@ -98,6 +100,11 @@ export class GameScene implements Scene {
   private skin = "pink";
   private chara = "pico";
   private trailAcc = 0;
+  /** ゴースト: 並走させる過去のプレイ(なければnull)。world指定の時は取得でき次第差し替わる */
+  private ghostRun: GhostRun | null = null;
+  private ghostSrc: "none" | "self" | "world" = "none";
+  private ghostCol = 0;
+  private recorder = new GhostRecorder();
   /** ホームへ戻る確認ポップアップ(表示中はゲーム全体を一時停止) */
   private confirmOpen = false;
   private homeRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -124,7 +131,20 @@ export class GameScene implements Scene {
     this.skin = save.skin;
     this.chara = save.chara;
     setBgm("game");
-    logEvent("play_start", { mode: this.mode });
+    logEvent("play_start", { mode: this.mode, ghost: save.ghostMode });
+    // ゴースト: 自分のベストは即時、世界1位は取得でき次第(カウントダウン中に間に合う想定)差し替える
+    if (save.ghostMode !== "off") {
+      this.ghostRun = loadGhost(this.mode);
+      this.ghostSrc = this.ghostRun ? "self" : "none";
+      if (save.ghostMode === "world") {
+        void fetchTopGhost().then((run) => {
+          if (run && !this.finished) {
+            this.ghostRun = run;
+            this.ghostSrc = "world";
+          }
+        });
+      }
+    }
     // インタースティシャル広告を閉じた直後はvisibilitychangeが遅れて発火することがあり、
     // 開始直後にリスナーを付けると即ポーズしてしまう。少し遅らせてから監視を始める。
     this.visListenerTimer = setTimeout(() => {
@@ -157,6 +177,8 @@ export class GameScene implements Scene {
           colNext: this.tower.col(this.tower.h + 1),
           combo: this.combo,
           fever: this.feverT > 0,
+          ghost: this.ghostState(),
+          ghostSrc: this.ghostSrc,
         }),
       };
     }
@@ -226,6 +248,7 @@ export class GameScene implements Scene {
           this.goFlash = 0.6;
           break;
         case "hop": {
+          this.recorder.push(GAME.TIME - this.tower.timeLeft, ev.h);
           sfxHop(ev.h);
           hapticLight();
           const [x, y] = this.platPos(ev.h - 1);
@@ -283,6 +306,7 @@ export class GameScene implements Scene {
           break;
         }
         case "fall": {
+          this.recorder.push(GAME.TIME - this.tower.timeLeft, ev.to);
           this.combo = 0;
           this.misses++;
           if (this.feverT > 0) {
@@ -311,6 +335,15 @@ export class GameScene implements Scene {
     const camTarget = this.tower.visualH() + MOTION.CAM_LOOKAHEAD;
     this.camH += (camTarget - this.camH) * damp(MOTION.CAM_RATE, dt);
 
+    // ゴーストの横位置: いま見えている足場の高さにいる間はその足場の列、先すぎる/地面なら中央。
+    // 足場の側が切り替わるたびに瞬間移動しないよう追従させる
+    const gs = this.ghostState();
+    if (gs) {
+      const hr = Math.round(gs.h);
+      const target = hr >= 1 && hr <= this.tower.h + 3 ? this.tower.col(hr) : 0;
+      this.ghostCol += (target - this.ghostCol) * damp(16, dt);
+    }
+
     if (this.tower.phase === "done") {
       this.endT += dt;
       if (this.endT >= GAME.END_DELAY && !this.finished) {
@@ -327,6 +360,12 @@ export class GameScene implements Scene {
           sec: Math.round(GAME.TIME - Math.max(this.tower.timeLeft, 0)),
         });
         const outcome = addScore(score, this.mode === "ranked");
+        // ゴースト: 並走相手との勝敗を記録し、自己ベストなら今回のプレイを新しいゴーストとして保存
+        const ghostVs = this.ghostRun
+          ? { name: this.ghostRun.name ?? t("ghostSelfName"), score: this.ghostRun.score }
+          : undefined;
+        if (ghostVs) logEvent("ghost_result", { src: this.ghostSrc, win: score > ghostVs.score });
+        saveGhostIfBest(this.mode, { score, keys: this.recorder.keys });
         // ほんばんのみ世界へ送信。判定はsyncBest(rankedBest > lastSynced)。
         // 失敗しても次回のほんばん終了時かランキング画面で自動再送される。
         const sync: SyncStatus = { state: "none" };
@@ -335,6 +374,7 @@ export class GameScene implements Scene {
           void syncBest().then((r) => {
             sync.state = r === "sent" ? "ok" : r === "failed" ? "fail" : "none";
           });
+          void syncRoom(); // 参加中のともだちルームにも反映(未参加なら何もしない)
         }
         this.app.manager.switchTo(
           new ResultScene(this.app, {
@@ -344,6 +384,7 @@ export class GameScene implements Scene {
             best: outcome.save.best,
             mode: this.mode,
             sync,
+            ghost: ghostVs,
           }),
         );
       }
@@ -667,6 +708,46 @@ export class GameScene implements Scene {
     }
   }
 
+  /** ゴーストの現在の高さと、そこまでの最高到達点。経過はカウントダウン中0・終了後は固定 */
+  private ghostState(): { h: number; max: number } | null {
+    if (!this.ghostRun) return null;
+    const el = this.tower.phase === "count" ? 0 : clamp(GAME.TIME - this.tower.timeLeft, 0, GAME.TIME);
+    return ghostAt(this.ghostRun, el);
+  }
+
+  /** ゴーストの足元の画面Y(画面外なら範囲外の値になる) */
+  private ghostY(h: number): number {
+    return this.app.vp.h * LAYOUT.ANCHOR + (this.camH - h) * LAYOUT.STEP_H * this.app.vp.unit;
+  }
+
+  /** 並走ゴースト: 半透明の自キャラ。プレイヤーの後ろに描く */
+  private drawGhost(ctx: CanvasRenderingContext2D): void {
+    const gs = this.ghostState();
+    if (!gs || this.tower.phase === "count") return;
+    const { vp } = this.app;
+    const u = vp.unit;
+    const r = LAYOUT.PLAYER_R * u;
+    const gy = this.ghostY(gs.h);
+    if (gy < -r * 3 || gy > vp.h + r * 3) return; // 画面外(方向はHUDの▲▼で示す)
+    const gx = vp.w / 2 + this.ghostCol * LAYOUT.COL_OFFSET * u;
+    ctx.save();
+    ctx.translate(gx, gy - r - 4 * u);
+    ctx.globalAlpha = 0.4;
+    drawChara(ctx, { r, u, t: this.t, chara: this.chara, skin: this.skin, pose: { armLift: 0.6 } });
+    ctx.restore();
+    // 世界ゴーストは持ち主の名前を頭上に出す
+    if (this.ghostSrc === "world" && this.ghostRun?.name) {
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#eaf6ff";
+      ctx.font = `800 ${9 * u}px ${FONT}`;
+      ctx.fillText(`👻 ${this.ghostRun.name}`, gx, gy - r * 2 - 14 * u);
+      ctx.restore();
+    }
+  }
+
   private drawClimber(ctx: CanvasRenderingContext2D): void {
     const { vp } = this.app;
     const u = vp.unit;
@@ -760,6 +841,7 @@ export class GameScene implements Scene {
       }
     }
 
+    this.drawGhost(ctx);
     this.drawClimber(ctx);
     drawFx(ctx, vp, this.fx);
     ctx.restore();
@@ -827,6 +909,17 @@ export class GameScene implements Scene {
     ctx.fillStyle = COLORS.gold;
     ctx.font = `800 ${18 * u}px -apple-system, system-ui, sans-serif`;
     ctx.fillText(`${Math.max(this.best, tw.maxH)}m`, w - 16 * u, by + 13 * u);
+
+    // ゴースト: 相手の到達高度。画面外なら上下どちらにいるかを▲▼で示す。先行されている間は赤み、追い越すと水色
+    const gs = this.ghostState();
+    if (gs && tw.phase !== "count") {
+      const gy = this.ghostY(gs.h);
+      const r = LAYOUT.PLAYER_R * u;
+      const arrow = gy < -r * 3 ? "▲" : gy > H + r * 3 ? "▼" : "";
+      ctx.fillStyle = gs.max > tw.maxH ? COLORS.accent2 : COLORS.accent;
+      ctx.font = `800 ${12 * u}px ${FONT}`;
+      ctx.fillText(`👻${arrow} ${gs.max}m`, w - 16 * u, by + 40 * u);
+    }
 
     // ホームへ戻るボタン(たかさ表示の下、半透明)
     if (tw.phase !== "done") {

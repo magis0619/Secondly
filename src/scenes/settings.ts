@@ -5,7 +5,8 @@ import { setBgm, setBgmMuted } from "../audio/bgm.ts";
 import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, LEGAL, ONLINE, VERSION } from "../game/config.ts";
 import { t, toggleLang } from "../game/i18n.ts";
-import { loadSave, setPlayerName, toggleBgmOff, toggleSfxOff } from "../game/save.ts";
+import type { GhostMode } from "../game/save.ts";
+import { loadSave, setGhostMode, setPlayerName, toggleBgmOff, toggleSfxOff } from "../game/save.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, drawIconLabel, inRect } from "../render/ui.ts";
 import { HomeScene } from "./home.ts";
@@ -17,6 +18,7 @@ export class SettingsScene implements Scene {
   private name = "";
   private bgmOff = false;
   private sfxOff = false;
+  private ghostMode: GhostMode = "self";
   private rows: { rect: Rect; action: () => void; label: () => string; sub?: () => string }[] = [];
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private howto: HowToModal;
@@ -32,6 +34,7 @@ export class SettingsScene implements Scene {
     this.name = save.playerName;
     this.bgmOff = save.bgmOff;
     this.sfxOff = save.sfxOff;
+    this.ghostMode = save.ghostMode;
   }
 
   update(dt: number): void {
@@ -44,11 +47,11 @@ export class SettingsScene implements Scene {
     void h;
     this.rows = [];
     const rw = 300 * u;
-    let y = safeTop + 90 * u;
+    let y = safeTop + 84 * u;
     const add = (label: () => string, action: () => void, sub?: () => string) => {
-      const rh = (sub ? 66 : 54) * u;
+      const rh = (sub ? 64 : 48) * u;
       this.rows.push({ rect: { x: w / 2 - rw / 2, y, w: rw, h: rh }, action, label, sub });
-      y += rh + 14 * u;
+      y += rh + 10 * u;
     };
     add(
       () => t("changeName"),
@@ -82,6 +85,15 @@ export class SettingsScene implements Scene {
         this.sfxOff = toggleSfxOff();
         setSfxMuted(this.sfxOff);
         logEvent("sfx_toggle", { off: this.sfxOff });
+      },
+    );
+    add(
+      () => t("ghostRow", { state: t(this.ghostMode === "self" ? "ghostSelf" : this.ghostMode === "world" ? "ghostWorld" : "ghostOff") }),
+      () => {
+        // じぶん → せかい1い → オフ → じぶん…
+        const next: GhostMode = this.ghostMode === "self" ? "world" : this.ghostMode === "world" ? "off" : "self";
+        this.ghostMode = setGhostMode(next).ghostMode;
+        logEvent("ghost_mode", { mode: this.ghostMode });
       },
     );
     add(

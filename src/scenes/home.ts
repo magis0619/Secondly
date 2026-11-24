@@ -6,7 +6,7 @@ import { setBgm } from "../audio/bgm.ts";
 import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { currentLang, t, toggleLang } from "../game/i18n.ts";
-import { ensureIdentity, getTickets, loadSave } from "../game/save.ts";
+import { checkInStreak, ensureIdentity, getTickets, loadSave } from "../game/save.ts";
 import { drawChara } from "../render/chara.ts";
 import type { Rect } from "../render/ui.ts";
 import { FONT, drawButton, inRect } from "../render/ui.ts";
@@ -18,6 +18,7 @@ import { RankingScene } from "./ranking.ts";
 import { SettingsScene } from "./settings.ts";
 import { SkinsScene } from "./skins.ts";
 import { StoreScene } from "./store.ts";
+import { StreakModal } from "./streak.ts";
 
 /** タイトルのテーマ色(本編ゆうぐれゾーンの明るい版) */
 const SKY = { top: "#6b4a9e", mid: "#e0704a", bottom: "#ffc46e" };
@@ -42,12 +43,16 @@ export class HomeScene implements Scene {
   private nameRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private gearRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private langRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private streakRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private streak = 0;
   private howto: HowToModal;
+  private streakModal: StreakModal;
   private langpick: LanguagePickerModal;
 
   constructor(private app: App) {
     this.howto = new HowToModal(app);
     this.langpick = new LanguagePickerModal(app);
+    this.streakModal = new StreakModal(app);
   }
 
   /** セーブ内容を描画用フィールドへ反映 */
@@ -58,12 +63,27 @@ export class HomeScene implements Scene {
     this.supporter = save.supporter;
     this.skin = save.skin;
     this.chara = save.chara;
+    this.streak = save.streak;
   }
 
   enter(): void {
     logScreen("home");
     setBgm("menu");
+    // 連続ログイン: 1日1回だけ進み、ボーナス(チケット/ほのお解放)があればポップアップで知らせる。
+    // チケットの日付リセットはcheckInStreak内で済ませるので、残数の取得はその後
+    const ci = checkInStreak();
     this.tickets = getTickets(TICKETS.DAILY);
+    if (ci) {
+      logEvent("streak_checkin", { streak: ci.streak, bonus: ci.bonus });
+      // 言語選択/あそびかたの初回フローとは重ねない(初日は連続1日でボーナスも無く、ここは通らない)
+      if (ci.bonus > 0 || ci.unlockedFlame) {
+        const sv = loadSave();
+        this.streakModal.show(
+          { streak: ci.streak, bestStreak: sv.bestStreak, bonus: sv.adFree ? 0 : ci.bonus, unlockedFlame: ci.unlockedFlame },
+          true,
+        );
+      }
+    }
 
     // 初回起動(言語未確定)は、まず言語ピッカーを出す。名前の初期生成は言語確定後に行い、
     // 英語を選んだのに和名プレフィクスが付く…といったズレを防ぐ。あそびかたも言語確定後に出す。
@@ -87,6 +107,7 @@ export class HomeScene implements Scene {
     this.t += dt;
     this.langpick.update(dt);
     this.howto.update(dt);
+    this.streakModal.update(dt);
   }
 
   // ==================== 背景 ====================
@@ -328,6 +349,18 @@ export class HomeScene implements Scene {
     ctx.font = `800 ${20 * u}px ${FONT}`;
     ctx.fillStyle = "rgba(255,242,223,0.9)";
     ctx.fillText("⚙", this.gearRect.x + 18 * u, this.gearRect.y + 18 * u);
+    // 上部中央: 連続ログインのチップ(タップで詳細)
+    if (this.streak >= 1) {
+      this.streakRect = { x: w / 2 - 44 * u, y: vp.safeTop + 10 * u, w: 88 * u, h: 30 * u };
+      drawButton(ctx, u, this.streakRect, t("streakChip", { n: this.streak }), {
+        bg: "rgba(58,34,96,0.55)",
+        fg: "#ffb877",
+        fontPx: 10.5 * u,
+        depth: 2,
+      });
+    } else {
+      this.streakRect = { x: 0, y: 0, w: 0, h: 0 };
+    }
 
     // ボタン(座標は従来のまま。ふわっと浮遊)
     const floatY = Math.sin(this.t * 1.7) * 2 * u;
@@ -357,12 +390,21 @@ export class HomeScene implements Scene {
     drawButton(ctx, u, this.storeRect, t("storeBtn"), { bg: "#f5a03c", fg: "#4a2c00", fontPx: 12.5 * u });
     ctx.restore();
     this.howto.draw(ctx);
+    this.streakModal.draw(ctx);
     this.langpick.draw(ctx); // 最前面(あそびかたより手前)
   }
 
   onUp(x: number, y: number): void {
     if (this.langpick.onUp(x, y)) return; // 言語ピッカーが最優先でタップ吸収
     if (this.howto.onUp(x, y)) return;
+    if (this.streakModal.onUp(x, y)) return;
+    if (inRect(this.streakRect, x, y)) {
+      sfxStart();
+      logEvent("streak_view");
+      const sv = loadSave();
+      this.streakModal.show({ streak: sv.streak, bestStreak: sv.bestStreak, bonus: 0, unlockedFlame: false }, false);
+      return;
+    }
     if (inRect(this.practiceRect, x, y)) {
       sfxStart();
       this.app.manager.switchTo(new GameScene(this.app, "practice"));

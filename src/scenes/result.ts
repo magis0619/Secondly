@@ -32,6 +32,8 @@ export interface ResultParams {
   best: number;
   mode: GameMode;
   sync: SyncStatus;
+  /** 並走していたゴースト(なければ未指定)。勝敗をリザルトに出す */
+  ghost?: { name: string; score: number };
 }
 
 const COUNTUP = 0.8;
@@ -217,6 +219,15 @@ export class ResultScene implements Scene {
           ctx.fillText(t("syncFail"), w / 2, h * 0.51);
         }
       }
+    }
+
+    // ゴーストとの勝敗
+    if (p.ghost && ratio >= 1) {
+      const d = Math.abs(p.score - p.ghost.score);
+      const key = p.score > p.ghost.score ? "ghostWin" : p.score < p.ghost.score ? "ghostLose" : "ghostTie";
+      ctx.fillStyle = p.score > p.ghost.score ? COLORS.accent : p.score < p.ghost.score ? COLORS.textDim : COLORS.gold;
+      ctx.font = `800 ${13 * u}px -apple-system, system-ui, sans-serif`;
+      ctx.fillText(t(key, { name: p.ghost.name, d }), w / 2, h * 0.545);
     }
 
     // ボタン

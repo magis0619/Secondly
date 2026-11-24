@@ -30,7 +30,7 @@
 → (ほんばんでチケット切れのとき)補充画面(「広告を見て+3回」→ 広告)
 → ゲーム(3,2,1,GO! → 30秒 → TIME UP!)
 → リザルト(モードバッジ+高度カウントアップ+世界への送信結果)
-⇄ ランキング(🌏ほんばん=オンラインTOP50 / 📱れんしゅう=ローカルTOP10)
+⇄ ランキング(🌏ほんばん=オンラインTOP50 / 📱れんしゅう=ローカルTOP10 / 👥ともだち=招待コードのルーム)
 ⇄ ストア(広告じょきょ/開発者おうえん×3/リストア)
 ```
 
@@ -57,24 +57,10 @@
 **未設定の間は自動的にオフライン(ローカルのみ)で動作**。有効化する手順:
 
 1. [Firebase Console](https://console.firebase.google.com/) でプロジェクト作成(Sparkプラン=無料。書込2万/日・読取5万/日で十分)
-2. 「Firestore Database」を作成(本番モード)→「ルール」に以下を貼る:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /scores/{playerId} {
-      allow read: if true;
-      allow write: if request.resource.data.score is int
-                   && request.resource.data.score >= 0
-                   && request.resource.data.score <= 400
-                   && request.resource.data.name is string
-                   && request.resource.data.name.size() <= 12;
-      allow delete: if false;
-    }
-  }
-}
-```
+2. 「Firestore Database」を作成(本番モード)→ ルールはリポジトリの **`firestore.rules`** を使う
+   (`firebase deploy --only firestore:rules`、またはコンソールの「ルール」に内容を貼る)。
+   世界ランキング(`scores`)に加え、ともだちルーム(`rooms/{コード}/members/{playerId}`)と
+   ゴースト(`scores`ドキュメントの`ghost`文字列)を許可している。**ルールを更新しないとともだちタブは通信エラーになる**
 
 3. プロジェクト設定 → 全般 から **プロジェクトID** と **ウェブAPIキー** をコピーし、`src/game/config.ts` の `ONLINE.projectId` / `ONLINE.apiKey` に貼る
 
@@ -83,6 +69,32 @@ service cloud.firestore {
 - プレイヤー名は初回に「ノボラー1234」形式で自動生成、ホームで変更可(12文字)
 - TOP50に入っていなくても、`fetchMyRank()`(Firestoreの集計クエリ)で自分の順位だけを取得し、
   世界タブの下部に固定表示する(読み取りコストがほぼゼロで済むcountクエリを使用)
+
+### ともだちルーム(招待コードで内輪ランキング)
+
+- ランキング画面の **👥 ともだち** タブ。「ルームを つくる」で6文字のコード(例: `U6YD64`)が発行され、
+  「📨 しょうたい」で共有シート(コード+App Storeリンク)を開く。友だちは「コードを いれる」で参加
+- 名簿は `rooms/{コード}/members/{playerId}`(名前+ほんばんベスト)。参加は1ルームまで、人数表示は最大30人
+- ほんばん終了時・ランキング表示時に自動で最新ベストを書く(内容が前回と同じなら送らない=`roomSynced`)
+- 存在しないコードには入れない(名簿が空=ルームなし)。「ぬける」で自分の名簿を削除。全員が抜けるとルームは消える
+- コードを知っている人だけが読める設計(ルーム一覧APIは許可しない)。実装は `online.ts` の `room*`/`syncRoom`
+
+## ゴースト(過去の自分/世界1位と並走)
+
+- プレイ中、過去のプレイを**半透明のキャラ**として並走させる。HUD右上に相手の到達高度(`👻 42m`、画面外は▲▼)、
+  リザルトに勝敗(`👻 〜に かった!(+3m)`)を出す
+- 記録は「時刻→高さ」のキーフレームだけ(`ghost.ts`)。足場はプレイごとにランダムなので横位置は再生時の塔から決める
+- 保存先はlocalStorage(モード別=れんしゅう/ほんばんで自己ベストの1本ずつ。ベスト更新時に置き換え)
+- ほんばんのベストには同じ回のゴースト(数KBの文字列)を世界ランキングのドキュメントへ同梱して送る。
+  設定の「👻 ゴースト」で **じぶんのベスト / せかい1い / オフ** を切替(せかい1いは上位10件からゴースト付きの最上位を使用、10分キャッシュ)
+- 世界ランキング一覧の取得は `select` で name/score だけに絞り、ゴースト文字列を運ばない
+
+## 連続ログインボーナス
+
+- 毎日1回起動すると連続日数が伸びる(1日でも空くと1日目に戻る。最長記録は保持)。ホーム上部の🔥チップで確認
+- **2日目以降はほんばんチケット +1、7の倍数日は +3**(`config.ts` の `STREAK`)。獲得時はポップアップで通知
+- **最長7日で「ほのお」バンダナ解放**(`SKINS` の `streak` 条件→`save.bestStreak`)
+- 日付は端末のローカル日付で判定(`save.ts` の `checkInStreak`)。チケットの日付リセットを先に済ませてから付与する
 
 ## 広告と課金(iOS接続はmonetize.tsだけ)
 
@@ -109,6 +121,7 @@ service cloud.firestore {
 - **オンボーディング**: `lang_pick{lang}` / `howto_show{source}` / `howto_page{n,source}` / `howto_done{lastPage,source}`
 - **広告**: `adgate_view` / `ad_start` / `ad_result{ok}` / `adgate_exit{to}` / `ad_shown` / `ticket_refill{n}` / `ticket_refund`
 - **課金**: `product_tap{id}` / `purchase_result{id,ok}` / `purchase{id}` / `restore`
+- **継続/ゴースト/ともだち**: `streak_checkin{streak,bonus}` / `streak_view` / `ghost_result{src,win}` / `ghost_mode{mode}` / `room_create` / `room_join{ok,why}` / `room_invite` / `room_leave`(`play_start`には`ghost`設定が付く)
 - **その他**: `ranking_view{tab}` / `name_change` / `skin_select{id}` / `chara_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `share{mode,score}`
 
 **離脱分析の設計**: 画面遷移は `screen_view`(各Sceneの`enter()`で送信、Firebaseの経路探索が使える)。

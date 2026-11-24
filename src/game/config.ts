@@ -106,9 +106,20 @@ export const TICKETS = {
   AD_REWARD: 3,
 } as const;
 
+/**
+ * 連続ログインボーナス。毎日1回起動すると連続日数が伸び(1日でも空くと1に戻る)、
+ * 2日目以降はほんばんチケットがもらえる。WEEK日ごと(7,14,…日目)は大きめ。
+ * 最長記録が7日に届くときせかえ(ほのお)が解放される(config.SKINSのstreak条件)。
+ */
+export const STREAK = {
+  DAILY_BONUS: 1,
+  WEEK: 7,
+  WEEK_BONUS: 3,
+} as const;
+
 /** きせかえの解放条件(スキン/キャラ共通)。実績から自動判定なので解放状態の保存は不要 */
 export interface UnlockCond {
-  type: "free" | "plays" | "best" | "support" | "rankedBest" | "totalM" | "fever";
+  type: "free" | "plays" | "best" | "support" | "rankedBest" | "totalM" | "fever" | "streak";
   n: number;
 }
 
@@ -140,6 +151,7 @@ export const SKINS: Skin[] = [
   { id: "silver", name: "シルバー", color: "#cdd6e4", cond: { type: "totalM", n: 500 }, condText: "つうさん500m のぼる" },
   { id: "midnight", name: "ミッドナイト", color: "#31408f", cond: { type: "fever", n: 10 }, condText: "フィーバー10かい" },
   { id: "black", name: "くろ", color: "#3a4152", cond: { type: "plays", n: 100 }, condText: "100かい あそぶ" },
+  { id: "flame", name: "ほのお", color: "#ff7a2f", cond: { type: "streak", n: 7 }, condText: "7にち れんぞくログイン" },
 ];
 
 /** キャラクター(体型・パーツが変わる)。バンダナ(SKINS)とは独立に選べる */
@@ -171,6 +183,8 @@ export const LEGAL = {
   privacyUrl: "https://climb30-privacy.web.app/",
   // SNSシェアに載せるURL。当面はマーケサイト。App Store公開後はストアURLに差し替え可
   marketingUrl: "https://climb30-marketing.web.app/",
+  // ともだち招待の共有文に載せるApp Storeの公開ページ(言語に依らないID形式)
+  storeUrl: "https://apps.apple.com/app/id6793592700",
 };
 
 export const ONLINE = {
@@ -182,4 +196,9 @@ export const ONLINE = {
   // 実際に届きうる上限より少し余裕を持たせた400に制限する(Firestoreルールも合わせて更新すること)。
   MAX_SCORE: 400,
   NAME_MAX: 12,
+  /** ともだちルーム: コード長と、1ルームで表示する最大人数 */
+  ROOM_CODE_LEN: 6,
+  ROOM_MAX: 30,
+  /** ゴーストの最大キー数(これ以上は保存/送信しない。実プレイの上限は300強) */
+  GHOST_MAX_KEYS: 450,
 };
