@@ -30,7 +30,7 @@
 → (ほんばんでチケット切れのとき)補充画面(「広告を見て+3回」→ 広告)
 → ゲーム(3,2,1,GO! → 30秒 → TIME UP!)
 → リザルト(モードバッジ+高度カウントアップ+世界への送信結果)
-⇄ ランキング(🌏ほんばん=オンラインTOP50 / 📱れんしゅう=ローカルTOP10 / 👥ともだち=招待コードのルーム)
+⇄ ランキング(🌏ほんばん=オンラインTOP50 / 📱れんしゅう=ローカルTOP10)
 ⇄ ストア(広告じょきょ/開発者おうえん×3/リストア)
 ```
 
@@ -59,8 +59,8 @@
 1. [Firebase Console](https://console.firebase.google.com/) でプロジェクト作成(Sparkプラン=無料。書込2万/日・読取5万/日で十分)
 2. 「Firestore Database」を作成(本番モード)→ ルールはリポジトリの **`firestore.rules`** を使う
    (`firebase deploy --only firestore:rules`、またはコンソールの「ルール」に内容を貼る)。
-   世界ランキング(`scores`)に加え、ともだちルーム(`rooms/{コード}/members/{playerId}`)と
-   ゴースト(`scores`ドキュメントの`ghost`文字列)を許可している。**ルールを更新しないとともだちタブは通信エラーになる**
+   世界ランキング(`scores`)に加え、ゴースト(`scores`ドキュメントの`ghost`文字列)を許可している。
+   **ルールを更新しないと、ゴースト付きのスコア送信が拒否される**
 
 3. プロジェクト設定 → 全般 から **プロジェクトID** と **ウェブAPIキー** をコピーし、`src/game/config.ts` の `ONLINE.projectId` / `ONLINE.apiKey` に貼る
 
@@ -70,15 +70,6 @@
 - TOP50に入っていなくても、`fetchMyRank()`(Firestoreの集計クエリ)で自分の順位だけを取得し、
   世界タブの下部に固定表示する(読み取りコストがほぼゼロで済むcountクエリを使用)
 
-### ともだちルーム(招待コードで内輪ランキング)
-
-- ランキング画面の **👥 ともだち** タブ。「ルームを つくる」で6文字のコード(例: `U6YD64`)が発行され、
-  「📨 しょうたい」で共有シート(コード+App Storeリンク)を開く。友だちは「コードを いれる」で参加
-- 名簿は `rooms/{コード}/members/{playerId}`(名前+ほんばんベスト)。参加は1ルームまで、人数表示は最大30人
-- ほんばん終了時・ランキング表示時に自動で最新ベストを書く(内容が前回と同じなら送らない=`roomSynced`)
-- 存在しないコードには入れない(名簿が空=ルームなし)。「ぬける」で自分の名簿を削除。全員が抜けるとルームは消える
-- コードを知っている人だけが読める設計(ルーム一覧APIは許可しない)。実装は `online.ts` の `room*`/`syncRoom`
-
 ## ゴースト(過去の自分/世界1位と並走)
 
 - プレイ中、過去のプレイを**半透明のキャラ**として並走させる。HUD右上に相手の到達高度(`👻 42m`、画面外は▲▼)、
@@ -86,7 +77,8 @@
 - 記録は「時刻→高さ」のキーフレームだけ(`ghost.ts`)。足場はプレイごとにランダムなので横位置は再生時の塔から決める
 - 保存先はlocalStorage(モード別=れんしゅう/ほんばんで自己ベストの1本ずつ。ベスト更新時に置き換え)
 - ほんばんのベストには同じ回のゴースト(数KBの文字列)を世界ランキングのドキュメントへ同梱して送る。
-  設定の「👻 ゴースト」で **じぶんのベスト / せかい1い / オフ** を切替(せかい1いは上位10件からゴースト付きの最上位を使用、10分キャッシュ)
+  設定の「👻 ゴースト」で **オフ(既定) / じぶんのベスト / せかい1い** を切替(記録は設定に関係なく常に行う)。
+  世界1位は上位10件からゴースト付きの最上位を使い、**取得はプレイ開始と切り離してホーム表示時/設定切替時に先読み**(10分キャッシュ)。プレイ開始時はキャッシュを同期で使うので通信待ちがない
 - 世界ランキング一覧の取得は `select` で name/score だけに絞り、ゴースト文字列を運ばない
 
 ## 連続ログインボーナス
@@ -121,7 +113,7 @@
 - **オンボーディング**: `lang_pick{lang}` / `howto_show{source}` / `howto_page{n,source}` / `howto_done{lastPage,source}`
 - **広告**: `adgate_view` / `ad_start` / `ad_result{ok}` / `adgate_exit{to}` / `ad_shown` / `ticket_refill{n}` / `ticket_refund`
 - **課金**: `product_tap{id}` / `purchase_result{id,ok}` / `purchase{id}` / `restore`
-- **継続/ゴースト/ともだち**: `streak_checkin{streak,bonus}` / `streak_view` / `ghost_result{src,win}` / `ghost_mode{mode}` / `room_create` / `room_join{ok,why}` / `room_invite` / `room_leave`(`play_start`には`ghost`設定が付く)
+- **継続/ゴースト**: `streak_checkin{streak,bonus}` / `streak_view` / `ghost_result{src,win}` / `ghost_mode{mode}`(`play_start`には`ghost`設定が付く)
 - **その他**: `ranking_view{tab}` / `name_change` / `skin_select{id}` / `chara_select{id}` / `lang_change{lang}` / `bgm_toggle{off}` / `sfx_toggle{off}` / `review_prompt` / `share{mode,score}`
 
 **離脱分析の設計**: 画面遷移は `screen_view`(各Sceneの`enter()`で送信、Firebaseの経路探索が使える)。

@@ -51,12 +51,8 @@ export interface SaveData {
   streak: number;
   bestStreak: number;
   lastLogin: string;
-  /** プレイ中に並走するゴースト: "self"=自分のベスト / "world"=世界1位 / "off" */
+  /** プレイ中に並走するゴースト: "off"(既定) / "self"=自分のベスト / "world"=世界1位 */
   ghostMode: GhostMode;
-  /** 参加中のともだちルームのコード(空=未参加) */
-  room: string;
-  /** ルームへ送信済みの内容("コード|名前|スコア")。変わった時だけ再送する */
-  roomSynced: string;
 }
 
 export type GhostMode = "self" | "world" | "off";
@@ -84,9 +80,7 @@ const DEFAULTS: SaveData = {
   streak: 0,
   bestStreak: 0,
   lastLogin: "",
-  ghostMode: "self",
-  room: "",
-  roomSynced: "",
+  ghostMode: "off",
 };
 
 export function loadSave(): SaveData {
@@ -275,21 +269,6 @@ export function setGhostMode(mode: GhostMode): SaveData {
   save.ghostMode = mode;
   store(save);
   return save;
-}
-
-/** 参加中ルームの設定(空文字で退出)。コードが変わるので送信済みマークも消す */
-export function setRoom(code: string): SaveData {
-  const save = loadSave();
-  save.room = code;
-  save.roomSynced = "";
-  store(save);
-  return save;
-}
-
-export function markRoomSynced(key: string): void {
-  const save = loadSave();
-  save.roomSynced = key;
-  store(save);
 }
 
 /** スキン/キャラ共通の解放判定 */

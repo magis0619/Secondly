@@ -14,7 +14,7 @@ import { t, zoneName } from "../game/i18n.ts";
 import { addFeverCount, addScore, addTickets, ensureIdentity, loadSave } from "../game/save.ts";
 import type { GhostRun } from "../game/ghost.ts";
 import { GhostRecorder, ghostAt, loadGhost, saveGhostIfBest } from "../game/ghost.ts";
-import { fetchTopGhost, onlineEnabled, syncBest, syncRoom } from "../game/online.ts";
+import { fetchTopGhost, onlineEnabled, peekTopGhost, syncBest } from "../game/online.ts";
 import type { Side } from "../game/tower.ts";
 import { Tower } from "../game/tower.ts";
 import { drawChara } from "../render/chara.ts";
@@ -137,8 +137,15 @@ export class GameScene implements Scene {
       this.ghostRun = loadGhost(this.mode);
       this.ghostSrc = this.ghostRun ? "self" : "none";
       if (save.ghostMode === "world") {
+        // 世界ゴーストはホーム表示時に先読み済みのキャッシュを使う(通信待ちなしで開始時から出る)。
+        // 未取得の時だけ取得でき次第差し替える。キャッシュの更新もここで促す(10分以内なら通信しない)
+        const cached = peekTopGhost();
+        if (cached) {
+          this.ghostRun = cached;
+          this.ghostSrc = "world";
+        }
         void fetchTopGhost().then((run) => {
-          if (run && !this.finished) {
+          if (run && !cached && !this.finished) {
             this.ghostRun = run;
             this.ghostSrc = "world";
           }
@@ -374,7 +381,6 @@ export class GameScene implements Scene {
           void syncBest().then((r) => {
             sync.state = r === "sent" ? "ok" : r === "failed" ? "fail" : "none";
           });
-          void syncRoom(); // 参加中のともだちルームにも反映(未参加なら何もしない)
         }
         this.app.manager.switchTo(
           new ResultScene(this.app, {

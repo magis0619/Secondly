@@ -3,6 +3,7 @@ import type { Scene } from "../core/scene.ts";
 import { sfxStart, setSfxMuted } from "../audio/sfx.ts";
 import { setBgm, setBgmMuted } from "../audio/bgm.ts";
 import { logEvent, logScreen } from "../game/analytics.ts";
+import { fetchTopGhost } from "../game/online.ts";
 import { COLORS, LEGAL, ONLINE, VERSION } from "../game/config.ts";
 import { t, toggleLang } from "../game/i18n.ts";
 import type { GhostMode } from "../game/save.ts";
@@ -18,7 +19,7 @@ export class SettingsScene implements Scene {
   private name = "";
   private bgmOff = false;
   private sfxOff = false;
-  private ghostMode: GhostMode = "self";
+  private ghostMode: GhostMode = "off";
   private rows: { rect: Rect; action: () => void; label: () => string; sub?: () => string }[] = [];
   private backRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private howto: HowToModal;
@@ -90,8 +91,9 @@ export class SettingsScene implements Scene {
     add(
       () => t("ghostRow", { state: t(this.ghostMode === "self" ? "ghostSelf" : this.ghostMode === "world" ? "ghostWorld" : "ghostOff") }),
       () => {
-        // じぶん → せかい1い → オフ → じぶん…
-        const next: GhostMode = this.ghostMode === "self" ? "world" : this.ghostMode === "world" ? "off" : "self";
+        // オフ → じぶん → せかい1い → オフ…
+        const next: GhostMode = this.ghostMode === "off" ? "self" : this.ghostMode === "self" ? "world" : "off";
+        if (next === "world") void fetchTopGhost(); // 切替時に先読みしておく
         this.ghostMode = setGhostMode(next).ghostMode;
         logEvent("ghost_mode", { mode: this.ghostMode });
       },

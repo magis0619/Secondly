@@ -15,12 +15,6 @@ export async function shareResult(score: number, ranked: boolean): Promise<void>
   await shareText(text, LEGAL.marketingUrl);
 }
 
-/** ともだちルームへの招待(コード+ストアURL)を共有する */
-export async function shareInvite(code: string): Promise<void> {
-  logEvent("room_invite");
-  await shareText(t("inviteText", { code }), LEGAL.storeUrl);
-}
-
 async function shareText(text: string, url: string): Promise<void> {
   try {
     // ネイティブ共有シート(iOS)。プラグイン未導入/Web では throw されるのでcatchでフォールバック

@@ -6,6 +6,7 @@ import { setBgm } from "../audio/bgm.ts";
 import { logEvent, logScreen } from "../game/analytics.ts";
 import { COLORS, TICKETS } from "../game/config.ts";
 import { currentLang, t, toggleLang } from "../game/i18n.ts";
+import { fetchTopGhost } from "../game/online.ts";
 import { checkInStreak, ensureIdentity, getTickets, loadSave } from "../game/save.ts";
 import { drawChara } from "../render/chara.ts";
 import type { Rect } from "../render/ui.ts";
@@ -71,6 +72,8 @@ export class HomeScene implements Scene {
     setBgm("menu");
     // 連続ログイン: 1日1回だけ進み、ボーナス(チケット/ほのお解放)があればポップアップで知らせる。
     // チケットの日付リセットはcheckInStreak内で済ませるので、残数の取得はその後
+    // 世界ゴースト設定の時は、プレイ開始より前(ここ)で取得を済ませておく
+    if (loadSave().ghostMode === "world") void fetchTopGhost();
     const ci = checkInStreak();
     this.tickets = getTickets(TICKETS.DAILY);
     if (ci) {

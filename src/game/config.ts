@@ -183,8 +183,6 @@ export const LEGAL = {
   privacyUrl: "https://climb30-privacy.web.app/",
   // SNSシェアに載せるURL。当面はマーケサイト。App Store公開後はストアURLに差し替え可
   marketingUrl: "https://climb30-marketing.web.app/",
-  // ともだち招待の共有文に載せるApp Storeの公開ページ(言語に依らないID形式)
-  storeUrl: "https://apps.apple.com/app/id6793592700",
 };
 
 export const ONLINE = {
@@ -196,9 +194,6 @@ export const ONLINE = {
   // 実際に届きうる上限より少し余裕を持たせた400に制限する(Firestoreルールも合わせて更新すること)。
   MAX_SCORE: 400,
   NAME_MAX: 12,
-  /** ともだちルーム: コード長と、1ルームで表示する最大人数 */
-  ROOM_CODE_LEN: 6,
-  ROOM_MAX: 30,
   /** ゴーストの最大キー数(これ以上は保存/送信しない。実プレイの上限は300強) */
   GHOST_MAX_KEYS: 450,
 };

@@ -13,7 +13,6 @@
  *  [課金] product_tap{id} / purchase_result{id,ok} / purchase{id} / restore
  *  [継続] streak_checkin{streak,bonus} / streak_view
  *  [ゴースト] play_start{ghost=設定} / ghost_result{src,win} / ghost_mode{mode}
- *  [ともだち] room_create / room_join{ok,why} / room_invite / room_leave
  *  [その他] ranking_view{tab} / name_change / skin_select{id} / chara_select{id} /
  *          lang_change{lang} / bgm_toggle / sfx_toggle / review_prompt / share{mode,score}
  *
